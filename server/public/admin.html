@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClawChat 管理控制台</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --bg:#0f0f23; --surface:#1a1a2e; --primary:#e94560;
+      --text:#eee; --dim:#888; --input-bg:#16213e;
+      --border:#2d3748; --green:#4ade80; --red:#f87171; --blue:#60a5fa;
+      --radius:10px;
+    }
+    body { background:var(--bg); color:var(--text); font-family:-apple-system,'Segoe UI',Roboto,sans-serif; min-height:100vh; }
+    a { color:var(--blue); text-decoration:none; }
+
+    /* 顶栏 */
+    .topbar { background:var(--surface); border-bottom:1px solid var(--border); padding:14px 24px; display:flex; align-items:center; justify-content:space-between; }
+    .topbar h1 { font-size:18px; }
+    .topbar-actions { display:flex; gap:10px; align-items:center; }
+    .topbar-actions a, .topbar-actions button { padding:7px 14px; border-radius:var(--radius); font-size:14px; cursor:pointer; border:1px solid var(--border); background:none; color:var(--text); }
+    .topbar-actions a:hover, .topbar-actions button:hover { background:#ffffff10; }
+
+    /* 主体 */
+    .container { max-width:1000px; margin:0 auto; padding:24px 16px; }
+
+    /* 统计卡片 */
+    .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:28px; }
+    .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; text-align:center; }
+    .stat-num { font-size:28px; font-weight:700; color:var(--primary); }
+    .stat-label { font-size:12px; color:var(--dim); margin-top:4px; }
+
+    /* 面板 */
+    .panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:24px; overflow:hidden; }
+    .panel-header { padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+    .panel-header h2 { font-size:15px; font-weight:600; }
+    .panel-body { padding:16px 18px; }
+
+    /* 表格 */
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    th { color:var(--dim); font-weight:500; padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
+    td { padding:10px 10px; border-bottom:1px solid #1a2030; vertical-align:middle; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:#ffffff05; }
+
+    /* 角标 */
+    .badge { display:inline-block; padding:3px 8px; border-radius:20px; font-size:11px; font-weight:600; }
+    .badge-admin  { background:#7c3aed30; color:#a78bfa; }
+    .badge-user   { background:#1e3a5f; color:var(--blue); }
+    .badge-active { background:#14532d; color:var(--green); }
+    .badge-banned { background:#450a0a; color:var(--red); }
+    .badge-valid  { background:#14532d; color:var(--green); }
+    .badge-used   { background:#1e293b; color:var(--dim); }
+    .badge-expired{ background:#450a0a; color:var(--red); }
+
+    /* 操作按钮 */
+    .act-btn { padding:5px 10px; border-radius:6px; border:1px solid var(--border); background:none; color:var(--text); font-size:12px; cursor:pointer; }
+    .act-btn:hover { background:#ffffff15; }
+    .act-btn.danger { border-color:#e94560; color:var(--red); }
+    .act-btn.danger:hover { background:#e9456015; }
+    .act-btn.success { border-color:#4ade80; color:var(--green); }
+    .btn-actions { display:flex; gap:6px; flex-wrap:wrap; }
+
+    /* 表单 */
+    .form-row { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+    .form-group { display:flex; flex-direction:column; gap:5px; }
+    .form-group label { font-size:12px; color:var(--dim); }
+    .form-group input, .form-group select {
+      padding:9px 12px; border:1px solid var(--border); border-radius:8px;
+      background:var(--input-bg); color:var(--text); font-size:14px; outline:none;
+    }
+    .form-group input:focus, .form-group select:focus { border-color:var(--primary); }
+    .btn-primary { padding:9px 18px; background:var(--primary); color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer; font-weight:600; }
+    .btn-primary:hover { opacity:0.85; }
+
+    /* 邀请码显示 */
+    .code-box { font-family:monospace; font-size:16px; font-weight:700; letter-spacing:0.1em; color:var(--green); background:#14532d20; border:1px solid #14532d; border-radius:8px; padding:10px 16px; display:inline-block; margin-top:10px; cursor:pointer; }
+    .code-box:hover { background:#14532d30; }
+
+    /* 消息 */
+    .msg-bar { padding:8px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
+    .msg-bar.success { background:#14532d30; color:var(--green); border:1px solid #14532d; }
+    .msg-bar.error   { background:#450a0a30; color:var(--red);   border:1px solid #450a0a; }
+    .empty-row { color:var(--dim); font-size:13px; padding:20px; text-align:center; }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🦞 ClawChat 管理控制台</h1>
+  <div class="topbar-actions">
+    <a href="/">← 返回聊天</a>
+    <button onclick="doAdminLogout()">退出</button>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- 统计 -->
+  <div class="stats-grid" id="stats-grid">
+    <div class="stat-card"><div class="stat-num" id="s-total">—</div><div class="stat-label">总用户数</div></div>
+    <div class="stat-card"><div class="stat-num" id="s-active">—</div><div class="stat-label">活跃用户</div></div>
+    <div class="stat-card"><div class="stat-num" id="s-banned">—</div><div class="stat-label">已封禁</div></div>
+    <div class="stat-card"><div class="stat-num" id="s-msgs">—</div><div class="stat-label">消息总数</div></div>
+    <div class="stat-card"><div class="stat-num" id="s-codes">—</div><div class="stat-label">有效邀请码</div></div>
+  </div>
+
+  <!-- 消息条 -->
+  <div class="msg-bar" id="msg-bar"></div>
+
+  <!-- 用户管理 -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>👥 用户管理</h2>
+      <button class="act-btn" onclick="loadUsers()">刷新</button>
+    </div>
+    <div class="panel-body" style="padding:0">
+      <table>
+        <thead><tr>
+          <th>用户名</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th>
+        </tr></thead>
+        <tbody id="users-tbody">
+          <tr><td colspan="5" class="empty-row">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 邀请码 -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>🎟 邀请码管理</h2>
+      <button class="act-btn" onclick="loadCodes()">刷新</button>
+    </div>
+    <div class="panel-body">
+      <!-- 生成新邀请码 -->
+      <div class="form-row" style="margin-bottom:16px">
+        <div class="form-group">
+          <label>最大使用次数</label>
+          <input type="number" id="code-maxuses" value="1" min="1" max="100" style="width:100px">
+        </div>
+        <div class="form-group">
+          <label>有效天数（0=永久）</label>
+          <input type="number" id="code-days" value="7" min="0" max="365" style="width:110px">
+        </div>
+        <button class="btn-primary" onclick="generateCode()">生成邀请码</button>
+      </div>
+      <div id="new-code-box" style="display:none">
+        新邀请码（点击复制）：
+        <div class="code-box" id="new-code-text" onclick="copyCode()"></div>
+        <span id="copy-hint" style="font-size:12px;color:var(--dim);margin-left:8px"></span>
+      </div>
+    </div>
+    <div style="padding:0">
+      <table>
+        <thead><tr>
+          <th>邀请码</th><th>状态</th><th>使用次数</th><th>创建人</th><th>到期时间</th><th>操作</th>
+        </tr></thead>
+        <tbody id="codes-tbody">
+          <tr><td colspan="6" class="empty-row">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API   = location.origin;
+const token = localStorage.getItem('token');
+const myId  = null; // 从 token 解析
+
+if (!token) location.href = '/';
+
+async function api(method, path, body) {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json();
+  if (res.status === 403) { showMsg('无管理员权限，请使用管理员账号', 'error'); throw new Error('403'); }
+  return data;
+}
+
+function showMsg(text, type='success') {
+  const bar = document.getElementById('msg-bar');
+  bar.textContent = text; bar.className = `msg-bar ${type}`; bar.style.display = 'block';
+  setTimeout(() => bar.style.display = 'none', 4000);
+}
+
+// ── 统计 ──────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const data = await api('GET', '/admin/stats');
+    if (!data.ok) return;
+    const s = data.stats;
+    document.getElementById('s-total').textContent  = s.totalUsers;
+    document.getElementById('s-active').textContent = s.activeUsers;
+    document.getElementById('s-banned').textContent = s.bannedUsers;
+    document.getElementById('s-msgs').textContent   = s.totalMsgs;
+    document.getElementById('s-codes').textContent  = s.activeCodes;
+  } catch {}
+}
+
+// ── 用户管理 ──────────────────────────────────────────────────────
+async function loadUsers() {
+  try {
+    const data = await api('GET', '/admin/users');
+    if (!data.ok) return;
+    const tbody = document.getElementById('users-tbody');
+    if (!data.users.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty-row">暂无用户</td></tr>'; return; }
+    tbody.innerHTML = data.users.map(u => `
+      <tr>
+        <td><b>${esc(u.username)}</b></td>
+        <td><span class="badge badge-${u.role}">${u.role === 'admin' ? '管理员' : '普通用户'}</span></td>
+        <td><span class="badge badge-${u.status}">${u.status === 'active' ? '正常' : '已封禁'}</span></td>
+        <td style="color:var(--dim);font-size:12px">${new Date(u.created_at*1000).toLocaleDateString('zh-CN')}</td>
+        <td>
+          <div class="btn-actions">
+            ${u.status === 'active'
+              ? `<button class="act-btn danger" onclick="setUserStatus('${u.id}','banned')">封禁</button>`
+              : `<button class="act-btn success" onclick="setUserStatus('${u.id}','active')">解封</button>`}
+            ${u.role === 'user'
+              ? `<button class="act-btn" onclick="setUserRole('${u.id}','admin')">升管理员</button>`
+              : `<button class="act-btn" onclick="setUserRole('${u.id}','user')">降权限</button>`}
+            <button class="act-btn danger" onclick="deleteUser('${u.id}','${esc(u.username)}')">删除</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  } catch {}
+}
+
+async function setUserStatus(id, status) {
+  try {
+    const data = await api('PATCH', `/admin/users/${id}/status`, { status });
+    if (data.ok) { showMsg(`状态已更新`); loadUsers(); loadStats(); }
+    else showMsg(data.error, 'error');
+  } catch {}
+}
+
+async function setUserRole(id, role) {
+  if (!confirm(`确认修改用户角色为 ${role === 'admin' ? '管理员' : '普通用户'}？`)) return;
+  try {
+    const data = await api('PATCH', `/admin/users/${id}/role`, { role });
+    if (data.ok) { showMsg('角色已更新'); loadUsers(); }
+    else showMsg(data.error, 'error');
+  } catch {}
+}
+
+async function deleteUser(id, name) {
+  if (!confirm(`确认删除用户 "${name}"？此操作不可恢复，其所有消息也将删除。`)) return;
+  try {
+    const data = await api('DELETE', `/admin/users/${id}`);
+    if (data.ok) { showMsg('用户已删除'); loadUsers(); loadStats(); }
+    else showMsg(data.error, 'error');
+  } catch {}
+}
+
+// ── 邀请码 ────────────────────────────────────────────────────────
+async function loadCodes() {
+  try {
+    const data = await api('GET', '/admin/invite-codes');
+    if (!data.ok) return;
+    const tbody = document.getElementById('codes-tbody');
+    if (!data.codes.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty-row">暂无邀请码</td></tr>'; return; }
+    const now = Date.now() / 1000;
+    tbody.innerHTML = data.codes.map(c => {
+      const expired = c.expires_at && c.expires_at < now;
+      const full    = c.use_count >= c.max_uses;
+      const status  = expired ? 'expired' : full ? 'used' : 'valid';
+      const statusLabel = expired ? '已过期' : full ? '已用完' : '有效';
+      const expStr = c.expires_at ? new Date(c.expires_at*1000).toLocaleDateString('zh-CN') : '永久';
+      return `
+        <tr>
+          <td><code style="font-size:14px;letter-spacing:.05em">${esc(c.code)}</code></td>
+          <td><span class="badge badge-${status}">${statusLabel}</span></td>
+          <td style="color:var(--dim)">${c.use_count} / ${c.max_uses}</td>
+          <td style="color:var(--dim);font-size:12px">${esc(c.creator || '—')}</td>
+          <td style="color:var(--dim);font-size:12px">${expStr}</td>
+          <td>
+            <button class="act-btn danger" onclick="revokeCode('${esc(c.code)}')">撤销</button>
+          </td>
+        </tr>`;
+    }).join('');
+  } catch {}
+}
+
+async function generateCode() {
+  const maxUses      = parseInt(document.getElementById('code-maxuses').value) || 1;
+  const expiresInDays = parseInt(document.getElementById('code-days').value) || 0;
+  try {
+    const data = await api('POST', '/admin/invite-codes', { maxUses, expiresInDays: expiresInDays || null });
+    if (!data.ok) return showMsg(data.error || '生成失败', 'error');
+    document.getElementById('new-code-box').style.display = 'block';
+    document.getElementById('new-code-text').textContent = data.code;
+    document.getElementById('copy-hint').textContent = '';
+    showMsg('邀请码生成成功'); loadCodes(); loadStats();
+  } catch {}
+}
+
+function copyCode() {
+  const code = document.getElementById('new-code-text').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    document.getElementById('copy-hint').textContent = '✓ 已复制';
+  }).catch(() => {
+    document.getElementById('copy-hint').textContent = '请手动复制';
+  });
+}
+
+async function revokeCode(code) {
+  if (!confirm(`确认撤销邀请码 ${code}？`)) return;
+  try {
+    const data = await api('DELETE', `/admin/invite-codes/${code}`);
+    if (data.ok) { showMsg('邀请码已撤销'); loadCodes(); loadStats(); }
+    else showMsg(data.error, 'error');
+  } catch {}
+}
+
+function doAdminLogout() {
+  localStorage.removeItem('token'); localStorage.removeItem('username');
+  localStorage.removeItem('userRole'); location.href = '/';
+}
+
+function esc(t) {
+  const d = document.createElement('div'); d.textContent = String(t||''); return d.innerHTML;
+}
+
+// 初始化
+loadStats(); loadUsers(); loadCodes();
+</script>
+</body>
+</html>

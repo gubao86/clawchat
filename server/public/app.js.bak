@@ -1,0 +1,218 @@
+// === ClawChat PWA Client ===
+const API = location.origin;
+const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+let token = localStorage.getItem('token');
+let ws = null;
+let reconnectTimer = null;
+let currentStreamId = null;
+let streamBuffer = '';
+
+// === 认证 ===
+async function doLogin() {
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  if (!username || !password) return showError('请填写用户名和密码');
+  try {
+    const res = await fetch(`${API}/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!res.ok) return showError(data.error || '登录失败');
+    token = data.token;
+    localStorage.setItem('token', token);
+    localStorage.setItem('username', data.user.username);
+    showChat();
+  } catch (e) { showError('网络错误'); }
+}
+
+async function doRegister() {
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  if (!username || !password) return showError('请填写用户名和密码');
+  if (password.length < 6) return showError('密码至少6位');
+  try {
+    const res = await fetch(`${API}/auth/register`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!res.ok) return showError(data.error || '注册失败');
+    token = data.token;
+    localStorage.setItem('token', token);
+    localStorage.setItem('username', data.user.username);
+    showChat();
+  } catch (e) { showError('网络错误'); }
+}
+
+function doLogout() {
+  token = null; localStorage.removeItem('token'); localStorage.removeItem('username');
+  if (ws) ws.close();
+  document.getElementById('login-page').style.display = 'flex';
+  document.getElementById('chat-page').style.display = 'none';
+  document.getElementById('messages').innerHTML = '';
+}
+
+function showError(msg) { document.getElementById('auth-error').textContent = msg; }
+
+// === WebSocket ===
+function connectWS() {
+  if (ws && ws.readyState <= 1) return;
+  ws = new WebSocket(WS_URL);
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'auth', token }));
+    setStatus('已连接', true);
+  };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    handleWSMessage(msg);
+  };
+  ws.onclose = () => {
+    setStatus('已断开', false);
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connectWS, 3000);
+  };
+  ws.onerror = () => ws.close();
+}
+
+function handleWSMessage(msg) {
+  switch (msg.type) {
+    case 'auth_ok': loadHistory(); break;
+    case 'auth_error': doLogout(); break;
+    case 'message':
+      if (msg.role === 'user') addMessage('user', msg.content, msg.ts);
+      break;
+    case 'stream_start':
+      currentStreamId = msg.id;
+      streamBuffer = '';
+      showTyping(true);
+      addStreamBubble(msg.id);
+      break;
+    case 'stream_chunk':
+      streamBuffer += msg.content;
+      updateStreamBubble(msg.id, streamBuffer);
+      break;
+    case 'stream_end':
+      showTyping(false);
+      finalizeStream(msg.id, streamBuffer);
+      currentStreamId = null;
+      streamBuffer = '';
+      break;
+    case 'error':
+      showTyping(false);
+      addMessage('assistant', '⚠️ ' + msg.message);
+      break;
+  }
+}
+
+function setStatus(text, online) {
+  const el = document.getElementById('conn-status');
+  el.textContent = text;
+  el.className = 'status' + (online ? ' online' : '');
+}
+
+// === 消息显示 ===
+function addMessage(role, content, ts) {
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  const time = ts ? new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '';
+  div.innerHTML = `<div class="bubble">${escapeHtml(content)}</div>${time ? `<span class="time">${time}</span>` : ''}`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function addStreamBubble(id) {
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+  div.id = `stream-${id}`;
+  div.innerHTML = `<div class="bubble">▌</div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function updateStreamBubble(id, content) {
+  const el = document.getElementById(`stream-${id}`);
+  if (el) {
+    el.querySelector('.bubble').textContent = content + '▌';
+    const container = document.getElementById('messages');
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+function finalizeStream(id, content) {
+  const el = document.getElementById(`stream-${id}`);
+  if (el) {
+    el.querySelector('.bubble').textContent = content;
+    const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    const span = document.createElement('span');
+    span.className = 'time';
+    span.textContent = time;
+    el.appendChild(span);
+  }
+}
+
+function showTyping(show) {
+  document.getElementById('typing').style.display = show ? 'block' : 'none';
+}
+
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+// === 发送消息 ===
+function sendMessage() {
+  const input = document.getElementById('input');
+  const content = input.value.trim();
+  if (!content || !ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ type: 'message', content }));
+  input.value = '';
+  input.style.height = '44px';
+  document.getElementById('send-btn').disabled = true;
+  setTimeout(() => { document.getElementById('send-btn').disabled = false; }, 500);
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function autoResize(el) {
+  el.style.height = '44px';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// === 历史加载 ===
+async function loadHistory() {
+  try {
+    const res = await fetch(`${API}/messages/history?limit=50`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (data.ok && data.messages) {
+      const container = document.getElementById('messages');
+      container.innerHTML = '';
+      data.messages.forEach(m => {
+        addMessage(m.role, m.content, m.created_at * 1000);
+      });
+    }
+  } catch (e) { console.error('Load history failed:', e); }
+}
+
+// === 页面切换 ===
+function showChat() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('chat-page').style.display = 'flex';
+  connectWS();
+  document.getElementById('input').focus();
+}
+
+// === 初始化 ===
+if (token) { showChat(); }
+
+// === PWA 注册 ===
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}

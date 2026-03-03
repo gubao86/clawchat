@@ -1,0 +1,26 @@
+# Server
+server/node_modules/
+server/data/*.db
+server/data/*.db-shm
+server/data/*.db-wal
+server/public/uploads/
+server/.env
+
+# Client - Flutter/Dart
+client/.dart_tool/
+client/.flutter-plugins
+client/.flutter-plugins-dependencies
+client/.packages
+client/build/
+client/android/.gradle/
+client/android/app/build/
+client/android/app/release.keystore
+client/android/key.properties
+client/.idea/
+client/*.iml
+client/lib/generated_plugin_registrant.dart
+
+# General
+.DS_Store
+*.log
+.env

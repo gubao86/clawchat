@@ -1,0 +1,15 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ClawChat WS Test</title></head>
+<body style="background:#0f0f23;color:#eee;font-family:sans-serif;padding:20px">
+<h1>🦞 WebSocket 测试</h1>
+<div id="status">正在连接...</div>
+<div id="messages" style="margin-top:20px;max-height:300px;overflow:auto;background:#1a1a2e;padding:10px;border-radius:8px"></div>
+<script>
+const status = document.getElementById('status');
+const messages = document.getElementById('messages');
+function log(msg) { messages.innerHTML += `<div style="margin:4px 0">${new Date().toLocaleTimeString()}: ${msg}</div>`; messages.scrollTop = messages.scrollHeight; }
+const ws = new WebSocket('ws://192.168.0.110:3900/ws');
+ws.onopen = () => { status.textContent = '✅ WebSocket 已连接'; log('连接成功'); ws.send(JSON.stringify({type:'auth',token:'test'})); };
+ws.onmessage = (e) => { log(`收到: ${e.data}`); };
+ws.onclose = () => { status.textContent = '❌ WebSocket 已断开'; log('连接断开'); };
+ws.onerror = (e) => { status.textContent = '❌ WebSocket 错误'; log(`错误: ${e}`); };
+</script></body></html>
