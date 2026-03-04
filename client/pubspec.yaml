@@ -19,7 +19,7 @@ dependencies:
   # 图片/相机选择
   image_picker: ^1.1.2
   # 语音录制
-  record: ^5.1.2
+  record: ^5.2.0
   # 文件路径（record 依赖）
   path_provider: ^2.1.4
   # 运行时权限申请
@@ -42,3 +42,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+
+dependency_overrides:
+  record_linux: ^1.0.0
