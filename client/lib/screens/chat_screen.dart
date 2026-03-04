@@ -288,7 +288,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final path = await _recorder.stop();
     setState(() { _isRecording = false; _recordDuration = Duration.zero; });
     if (path == null || _recordCancelled) {
-      if (path != null) { try { File(path).deleteSync(); } catch {} }
+      if (path != null) { try { File(path).deleteSync(); } catch (_) {} }
       setState(() => _recordCancelled = false);
       return;
     }
@@ -304,7 +304,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       _showSnack('录音上传失败: $e');
     }
-    try { File(path).deleteSync(); } catch {}
+    try { File(path).deleteSync(); } catch (_) {}
   }
 
   Future<void> _cancelRecording() async {
@@ -312,7 +312,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _recordTimer?.cancel();
     _recordCancelled = true;
     final path = await _recorder.stop();
-    if (path != null) { try { File(path).deleteSync(); } catch {} }
+    if (path != null) { try { File(path).deleteSync(); } catch (_) {} }
     setState(() { _isRecording = false; _recordCancelled = false; _recordDuration = Duration.zero; });
   }
 
@@ -1299,3 +1299,4 @@ class _ImageViewer extends StatelessWidget {
     );
   }
 }
+
