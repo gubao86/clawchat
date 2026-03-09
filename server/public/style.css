@@ -113,3 +113,53 @@ html, body { height: 100%; font-family: -apple-system, 'Segoe UI', Roboto, sans-
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (min-width: 600px) { .messages { padding: 16px 10%; } .msg { max-width: 70%; } .msg.system { max-width: 80%; width: 80%; } }
 .chat-error { color: #ff6b6b; text-align: center; padding: 8px; font-size: 14px; background: rgba(255,107,107,0.1); margin: 0 12px; border-radius: 8px; }
+
+/* ── Inline Buttons ── */
+.inline-buttons {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.btn-row {
+  display: flex;
+  gap: 6px;
+}
+.inline-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.inline-btn:hover { filter: brightness(1.2); transform: translateY(-1px); }
+.inline-btn:active { transform: translateY(0); }
+.inline-btn:disabled { opacity: 0.5; cursor: wait; }
+
+.inline-btn-primary {
+  background: #1e3a5f;
+  color: #93c5fd;
+  border-color: rgba(59,130,246,0.5);
+}
+.inline-btn-success {
+  background: #1a3d2e;
+  color: #6ee7b7;
+  border-color: rgba(16,185,129,0.5);
+}
+.inline-btn-danger {
+  background: #3d1a1a;
+  color: #fca5a5;
+  border-color: rgba(239,68,68,0.5);
+}
+.inline-btn-default {
+  background: #2d3748;
+  color: #d1d5db;
+  border-color: rgba(74,85,104,0.5);
+}

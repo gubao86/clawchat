@@ -128,7 +128,7 @@ function handleWSMessage(msg) {
       break;
     case 'auth_error': doLogout(); break;
     case 'message':
-      if (msg.role === 'user') addMessage(msg);
+      if (msg.role === 'user' || msg.role === 'assistant') addMessage(msg);
       break;
     case 'stream_start':
       currentStreamId = msg.id; streamBuffer = ''; showTyping(true); addStreamBubble(msg.id);
@@ -196,8 +196,14 @@ function addMessage(msg) {
       </div>`;
     }
   } else {
-    // 普通文本消息
-    bubbleHtml = `<div class="bubble">${escapeHtml(msg.content || '')}</div>`;
+    // 普通文本消息（支持 markdown 基础格式）
+    const textHtml = msg.role === 'assistant' ? simpleMarkdown(msg.content || '') : escapeHtml(msg.content || '');
+    bubbleHtml = `<div class="bubble">${textHtml}</div>`;
+  }
+
+  // v2: inline buttons 渲染
+  if (msg.buttons && Array.isArray(msg.buttons) && msg.buttons.length > 0) {
+    bubbleHtml += renderInlineButtons(msg.buttons);
   }
 
   div.innerHTML = bubbleHtml + (time ? `<span class="time">${time}</span>` : '');
@@ -278,6 +284,38 @@ function openLightbox(url) {
 // ══════════════════════════════════════════════════════════════════
 //  发送消息 & 输入处理
 // ══════════════════════════════════════════════════════════════════
+//  Inline Buttons
+// ══════════════════════════════════════════════════════════════════
+function renderInlineButtons(buttons) {
+  let html = '<div class="inline-buttons">';
+  for (const row of buttons) {
+    html += '<div class="btn-row">';
+    for (const btn of row) {
+      const style = btn.style || 'default';
+      html += `<button class="inline-btn inline-btn-${style}" onclick="sendCallback('${escapeHtml(btn.callback_data || btn.callbackData || '')}')">${escapeHtml(btn.text)}</button>`;
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function sendCallback(callbackData) {
+  if (!ws || ws.readyState !== 1) return;
+  // Disable clicked button, show loading
+  event.target.disabled = true;
+  event.target.textContent = '⏳';
+  ws.send(JSON.stringify({ type: 'callback', callbackData }));
+}
+
+function simpleMarkdown(text) {
+  return escapeHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\n/g, '<br>');
+}
+
+// ══════════════════════════════════════════════════════════════════
 async function sendMessage() {
   const input   = document.getElementById('input');
   const content = input.value.trim();
@@ -286,7 +324,12 @@ async function sendMessage() {
   if (content.startsWith('/') && content.length > 1) {
     hideCmdPalette();
     input.value = ''; input.style.height = '44px';
-    await execCommand(content);
+    // /clear 本地处理，其他命令通过 WS 发送（服务端返回 buttons）
+    if (content.trim().toLowerCase() === '/clear') {
+      await clearHistory();
+      return;
+    }
+    ws.send(JSON.stringify({ type: 'message', content: content.trim() }));
     return;
   }
 
@@ -471,18 +514,21 @@ function filterCommands(query) {
 function selectCommand(cmd, executable, argHint, terminal) {
   hideCmdPalette();
   const input = document.getElementById('input');
-  if (!executable && terminal) {
-    // 仅终端命令：填入并提示
-    addCommandResult(`${cmd}`, `此命令需在终端执行：\n${terminal}`, false);
-    input.value = '';
+  // 需要参数的命令填入输入框
+  if (argHint) {
+    input.value = cmd + ' ';
+    input.focus();
+    const len = input.value.length;
+    input.setSelectionRange(len, len);
     return;
   }
-  // 填入命令到输入框（带参数提示）
-  input.value = cmd + (argHint ? ' ' : '');
-  input.focus();
-  // 如果有参数提示，移动光标到末尾
-  const len = input.value.length;
-  input.setSelectionRange(len, len);
+  // 无参数命令：直接通过 WS 发送
+  input.value = '';
+  if (cmd.trim().toLowerCase() === '/clear') {
+    clearHistory();
+  } else {
+    ws.send(JSON.stringify({ type: 'message', content: cmd.trim() }));
+  }
 }
 
 function moveCmdSelection(dir) {
