@@ -677,3 +677,138 @@ document.addEventListener('click', e => {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
+
+// ══════════════════════════════════════════════════════════════════
+//  Menu 命令面板 (Command Sheet)
+// ══════════════════════════════════════════════════════════════════
+function toggleCommandSheet() {
+  const sheet = document.getElementById('command-sheet');
+  if (sheet.classList.contains('show')) {
+    closeCommandSheet();
+  } else {
+    openCommandSheet();
+  }
+}
+
+function openCommandSheet() {
+  const sheet = document.getElementById('command-sheet');
+  sheet.classList.add('show');
+  document.querySelector('.menu-btn').classList.add('active');
+  filterSheetCommands('');
+  setTimeout(() => document.getElementById('sheet-search').focus(), 100);
+}
+
+function closeCommandSheet() {
+  document.getElementById('command-sheet').classList.remove('show');
+  document.querySelector('.menu-btn').classList.remove('active');
+}
+
+function filterSheetCommands(query) {
+  const q = query.toLowerCase().replace(/^\//, '');
+  const list = document.getElementById('sheet-list');
+  const filtered = COMMANDS.filter(c =>
+    !q || c.cmd.toLowerCase().includes(q) || c.desc.includes(q) || c.group.includes(q)
+  );
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim)">没有匹配的命令</div>';
+    return;
+  }
+
+  const groups = {};
+  filtered.forEach(c => { if (!groups[c.group]) groups[c.group] = []; groups[c.group].push(c); });
+
+  let html = '';
+  for (const [group, cmds] of Object.entries(groups)) {
+    html += `<div class="cmd-group-label">${group}</div>`;
+    for (const c of cmds) {
+      const locked = c.admin && !isAdmin;
+      html += `<div class="cmd-item ${locked ? 'cmd-locked' : ''}"
+                    onclick="${locked ? '' : `sheetSelectCommand('${escapeHtml(c.cmd)}', ${!!c.argHint})`}">
+        <span class="cmd-name">${escapeHtml(c.cmd)}</span>
+        <span class="cmd-desc">${escapeHtml(c.desc)}</span>
+        ${locked ? '<span class="cmd-badge cmd-badge-admin">🔒</span>' : ''}
+      </div>`;
+    }
+  }
+  list.innerHTML = html;
+}
+
+function sheetSelectCommand(cmd, hasArg) {
+  closeCommandSheet();
+  if (hasArg) {
+    const input = document.getElementById('input');
+    input.value = cmd + ' ';
+    input.focus();
+    return;
+  }
+  if (cmd.trim().toLowerCase() === '/clear') {
+    clearHistory();
+  } else {
+    ws.send(JSON.stringify({ type: 'message', content: cmd.trim() }));
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  Emoji Picker
+// ══════════════════════════════════════════════════════════════════
+const EMOJI_CATEGORIES = {
+  '😀': ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','😗','😙','😚','🙂','🤗','🤩','🤔','🤨','😐','😑','😶','🙄','😏','😣','😥','😮','🤐','😯','😪','😫','😴','🥱','😌','😛','😜','🤪','😝','🤑','🤭','🤫','🤥','😬','😡','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖'],
+  '👋': ['👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','💪','🦾','🫶','❤️','🔥','💯','✨','⭐','🌟','💫','💥','💢','💦','💨','🕳️','💣','💬','👁️‍🗨️','🗨️','🗯️','💭'],
+  '🐶': ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐻‍❄️','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱','🐛','🦋','🐌','🐞','🐜','🪰','🪲','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🐘','🦛'],
+  '🍎': ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🫑','🌽','🥕','🧄','🧅','🥔','🍠','🥐','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍔','🍟','🍕','🫓','🥪','🌮','🌯','🫔','🥙','🧆','🥗','🍝','🍜','🍲','🍛','🍣','🍱','🥟','🦪','🍤','🍙','🍚','🍘','🍥','🥠','🥮','🍢','🍡','🍧','🍨','🍦','🥧','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🧂','🥤','🧋','🧃','🥛','☕','🍵','🍶','🍺','🍻','🥂','🍷','🥃'],
+  '⚽': ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🏒','🏑','🥍','🏏','🪃','🥅','⛳','🪁','🏹','🎣','🤿','🥊','🥋','🎽','🛹','🛼','🛷','⛸️','🥌','🎿','⛷️','🏂','🪂','🏋️','🤼','🤸','🤺','⛹️','🧗','🏄','🏊','🤽','🚣','🧘','🏆','🥇','🥈','🥉','🏅','🎖️','🎗️','🎫','🎪','🎭','🎨','🎬','🎤','🎧','🎼','🎹','🥁','🪘','🎷','🎺','🪗','🎸','🪕','🎻','🎲','♟️','🎯','🎳','🎮','🕹️','🎰'],
+  '🚗': ['🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🛵','🏍️','🛺','🚲','🛴','🛹','🚁','🛸','🚀','🛩️','✈️','🛫','🛬','🚢','⛵','🚤','⛽','🚦','🚥','🏁','🚧','⚓','🗺️','🗿','🗽','🗼','🏰','🏯','🏟️','🎡','🎢','🎠','⛲','🌋','⛰️','🏔️','🗻','🏕️','🏖️','🏜️','🏝️','🌅','🌄','🌠','🎇','🎆','🌇','🌆','🏙️','🌃','🌌','🌉','🌁'],
+  '💡': ['💡','🔦','🕯️','📱','💻','⌨️','🖥️','🖨️','🖱️','💾','💿','📀','📷','📸','📹','🎥','📽️','🎞️','📞','☎️','📟','📠','📺','📻','🎙️','🎚️','🎛️','🧭','⏱️','⏲️','⏰','🕰️','⌛','📡','🔋','🔌','🔧','🔩','🪛','🔨','⚙️','🧲','🪜','🧪','🧫','🧬','🔬','🔭','📡','💉','🩸','💊','🩹','🩺','🏥','📌','📍','🗑️','📦','📫','📬','📮','✉️','📧','📝','📃','📄','📑','🗒️','📊','📈','📉','🗓️','📅','📆','🗃️','🗳️','📁','📂','🗂️'],
+};
+
+let emojiPickerOpen = false;
+let currentEmojiCategory = '😀';
+
+function toggleEmojiPicker() {
+  const picker = document.getElementById('emoji-picker');
+  emojiPickerOpen = !emojiPickerOpen;
+  picker.style.display = emojiPickerOpen ? 'flex' : 'none';
+  if (emojiPickerOpen) renderEmojiPicker();
+}
+
+function renderEmojiPicker() {
+  const picker = document.getElementById('emoji-picker');
+  let html = '<div class="emoji-tab-bar">';
+  for (const cat of Object.keys(EMOJI_CATEGORIES)) {
+    html += `<button class="emoji-tab ${cat === currentEmojiCategory ? 'active' : ''}" onclick="switchEmojiCategory('${cat}')">${cat}</button>`;
+  }
+  html += '</div><div class="emoji-grid">';
+  for (const emoji of EMOJI_CATEGORIES[currentEmojiCategory]) {
+    html += `<button class="emoji-item" onclick="insertEmoji('${emoji}')">${emoji}</button>`;
+  }
+  html += '</div>';
+  picker.innerHTML = html;
+}
+
+function switchEmojiCategory(cat) {
+  currentEmojiCategory = cat;
+  renderEmojiPicker();
+}
+
+function insertEmoji(emoji) {
+  const input = document.getElementById('input');
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  input.value = input.value.slice(0, start) + emoji + input.value.slice(end);
+  input.focus();
+  const pos = start + emoji.length;
+  input.setSelectionRange(pos, pos);
+}
+
+// Close emoji picker when clicking outside
+document.addEventListener('click', (e) => {
+  if (emojiPickerOpen) {
+    const picker = document.getElementById('emoji-picker');
+    const btn = document.querySelector('.emoji-btn');
+    if (!picker.contains(e.target) && e.target !== btn) {
+      emojiPickerOpen = false;
+      picker.style.display = 'none';
+    }
+  }
+});

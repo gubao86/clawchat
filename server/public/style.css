@@ -163,3 +163,137 @@ html, body { height: 100%; font-family: -apple-system, 'Segoe UI', Roboto, sans-
   color: #d1d5db;
   border-color: rgba(74,85,104,0.5);
 }
+
+/* ── Menu & Emoji 按钮 ── */
+.menu-btn, .emoji-btn {
+  width: 40px; height: 40px;
+  border: none; background: none;
+  color: var(--text-dim); font-size: 20px;
+  cursor: pointer; flex-shrink: 0;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.menu-btn:hover, .emoji-btn:hover { background: #ffffff15; color: var(--text); }
+.menu-btn.active { color: var(--primary); background: #ffffff10; }
+
+/* ── Emoji Picker ── */
+#emoji-picker {
+  position: absolute;
+  bottom: 100%;
+  left: 40px;
+  background: var(--surface);
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 8px;
+  max-height: 280px;
+  width: 320px;
+  overflow-y: auto;
+  z-index: 101;
+  box-shadow: 0 -4px 20px #00000080;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+#emoji-picker .emoji-tab-bar {
+  width: 100%;
+  display: flex;
+  gap: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #333;
+  margin-bottom: 6px;
+  overflow-x: auto;
+}
+#emoji-picker .emoji-tab {
+  padding: 4px 8px;
+  border: none;
+  background: none;
+  font-size: 18px;
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+#emoji-picker .emoji-tab:hover,
+#emoji-picker .emoji-tab.active { background: #ffffff15; }
+#emoji-picker .emoji-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  width: 100%;
+}
+#emoji-picker .emoji-item {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  cursor: pointer;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  transition: background 0.1s;
+}
+#emoji-picker .emoji-item:hover { background: #ffffff15; transform: scale(1.2); }
+
+/* ── Command Sheet (全屏命令面板) ── */
+#command-sheet {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 200;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+}
+#command-sheet.show { display: flex; }
+#command-sheet .sheet-content {
+  background: var(--cmd-bg);
+  width: 100%;
+  max-width: 600px;
+  max-height: 70vh;
+  border-radius: 16px 16px 0 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.2s ease-out;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+#command-sheet .sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #333;
+}
+#command-sheet .sheet-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text);
+}
+#command-sheet .sheet-close {
+  width: 32px; height: 32px;
+  border: none; background: none;
+  color: var(--text-dim);
+  font-size: 20px;
+  cursor: pointer;
+  border-radius: 50%;
+}
+#command-sheet .sheet-close:hover { background: #ffffff15; }
+#command-sheet .sheet-search {
+  padding: 10px 16px;
+  border-bottom: 1px solid #222;
+}
+#command-sheet .sheet-search input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+}
+#command-sheet .sheet-search input:focus { border-color: var(--primary); }
+#command-sheet .sheet-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}

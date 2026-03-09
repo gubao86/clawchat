@@ -61,15 +61,32 @@
         </div>
         <div id="cmd-list"></div>
       </div>
-      <button class="attach-btn" onclick="document.getElementById('file-input').click()" title="发送文件">📎</button>
-      <input type="file" id="file-input" style="display:none"
-             accept="image/*,video/mp4,video/webm,audio/*,application/pdf,text/plain"
-             onchange="handleFileSelect(this)">
+      <button class="menu-btn" onclick="toggleCommandSheet()" title="命令菜单">☰</button>
+      <button class="emoji-btn" onclick="toggleEmojiPicker()" title="表情">😀</button>
+      <div id="emoji-picker" style="display:none"></div>
       <textarea id="input" rows="1"
                 placeholder="输入消息，或 / 查看命令..."
                 onkeydown="handleKey(event)"
                 oninput="handleInput(this)"></textarea>
+      <button class="attach-btn" onclick="document.getElementById('file-input').click()" title="发送文件">📎</button>
+      <input type="file" id="file-input" style="display:none"
+             accept="image/*,video/mp4,video/webm,audio/*,application/pdf,text/plain"
+             onchange="handleFileSelect(this)">
       <button class="send-btn" onclick="sendMessage()" title="发送 (Enter)">➤</button>
+    </div>
+  </div>
+
+  <!-- 全屏命令面板 -->
+  <div id="command-sheet" onclick="if(event.target===this)closeCommandSheet()">
+    <div class="sheet-content">
+      <div class="sheet-header">
+        <h3>📋 命令菜单</h3>
+        <button class="sheet-close" onclick="closeCommandSheet()">✕</button>
+      </div>
+      <div class="sheet-search">
+        <input id="sheet-search" placeholder="搜索命令..." oninput="filterSheetCommands(this.value)">
+      </div>
+      <div class="sheet-list" id="sheet-list"></div>
     </div>
   </div>
 
