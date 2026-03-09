@@ -1,0 +1,38 @@
+import express from 'express';
+import { createServer } from 'http';
+import helmet from 'helmet';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import config from './config.js';
+import logger from './utils/logger.js';
+import authRoutes from './routes/auth.js';
+import messageRoutes from './routes/messages.js';
+import fileRoutes from './routes/files.js';
+import commandRoutes from './routes/commands.js';
+import adminRoutes from './routes/admin.js';
+import sessionRoutes from './routes/sessions.js';
+import { setupWebSocket } from './ws-handler.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const app = express();
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(rateLimit(config.rateLimit));
+app.use(express.static(join(__dirname, '../public')));
+app.get('/ping', (req, res) => res.json({ ok: true }));
+app.get('/health', (req, res) => res.json({ ok: true, ts: Date.now() }));
+app.use('/auth', authRoutes);
+app.use('/messages', messageRoutes);
+app.use('/files', fileRoutes);
+app.use('/commands', commandRoutes);
+app.use('/admin', adminRoutes);
+app.use('/sessions', sessionRoutes);
+const server = createServer(app);
+setupWebSocket(server);
+server.listen(config.port, config.host, () => {
+  logger.info(`ClawChat server on ${config.host}:${config.port}`);
+  logger.info(`Gateway: ${config.gateway.url}`);
+});

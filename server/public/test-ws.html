@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket 连接测试</title>
+    <style>
+        body { font-family: monospace; margin: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        .log { background: #f8f9fa; padding: 10px; border: 1px solid #dee2e6; border-radius: 5px; max-height: 400px; overflow-y: auto; }
+        .log-entry { margin: 5px 0; padding: 5px; border-bottom: 1px solid #eee; }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .info { color: #17a2b8; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        input { padding: 10px; width: 300px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket 连接测试</h1>
+    
+    <div id="status" class="status disconnected">未连接</div>
+    
+    <div>
+        <input type="text" id="token" placeholder="输入JWT Token" value="">
+        <button onclick="connect()">连接</button>
+        <button onclick="disconnect()">断开</button>
+        <button onclick="clearLog()">清空日志</button>
+    </div>
+    
+    <div>
+        <input type="text" id="message" placeholder="输入消息内容" value="测试消息">
+        <button onclick="sendMessage()">发送消息</button>
+    </div>
+    
+    <h3>日志输出:</h3>
+    <div id="log" class="log"></div>
+    
+    <script>
+        let ws = null;
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+        
+        function addLog(type, message) {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function updateStatus(connected) {
+            status.textContent = connected ? '已连接' : '未连接';
+            status.className = `status ${connected ? 'connected' : 'disconnected'}`;
+        }
+        
+        function connect() {
+            const token = document.getElementById('token').value.trim();
+            if (!token) {
+                addLog('error', '请输入Token');
+                return;
+            }
+            
+            if (ws && ws.readyState <= 1) {
+                addLog('info', '已有连接，先断开');
+                ws.close();
+            }
+            
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            addLog('info', `正在连接到: ${wsUrl}`);
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                addLog('success', 'WebSocket连接已建立');
+                updateStatus(true);
+                // 发送认证消息
+                ws.send(JSON.stringify({ type: 'auth', token }));
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    addLog('info', `收到消息: ${JSON.stringify(data)}`);
+                    
+                    if (data.type === 'auth_ok') {
+                        addLog('success', '认证成功');
+                    } else if (data.type === 'auth_error') {
+                        addLog('error', `认证失败: ${data.error}`);
+                    }
+                } catch (e) {
+                    addLog('error', `解析消息失败: ${event.data}`);
+                }
+            };
+            
+            ws.onclose = (event) => {
+                addLog('info', `连接关闭: code=${event.code}, reason=${event.reason}`);
+                updateStatus(false);
+                ws = null;
+            };
+            
+            ws.onerror = (error) => {
+                addLog('error', `连接错误: ${error}`);
+                updateStatus(false);
+            };
+        }
+        
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                addLog('info', '已断开连接');
+            }
+        }
+        
+        function sendMessage() {
+            if (!ws || ws.readyState !== 1) {
+                addLog('error', '未连接，无法发送消息');
+                return;
+            }
+            
+            const message = document.getElementById('message').value.trim();
+            if (!message) {
+                addLog('error', '请输入消息内容');
+                return;
+            }
+            
+            const msg = {
+                type: 'message',
+                content: message,
+                sessionKey: 'main'
+            };
+            
+            ws.send(JSON.stringify(msg));
+            addLog('info', `已发送: ${JSON.stringify(msg)}`);
+        }
+        
+        function clearLog() {
+            log.innerHTML = '';
+        }
+        
+        // 自动获取token（如果已登录）
+        window.addEventListener('load', () => {
+            const token = localStorage.getItem('token');
+            if (token) {
+                document.getElementById('token').value = token;
+                addLog('info', '已从localStorage加载token');
+            }
+        });
+    </script>
+</body>
+</html>

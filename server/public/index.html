@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#16213e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>ClawChat</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <!-- ── 登录/注册页 ── -->
+  <div id="login-page" style="display:flex">
+    <h1>🦞 ClawChat</h1>
+    <p class="subtitle">OpenClaw AI 专用客户端</p>
+    <input type="text"     id="username"    placeholder="用户名"       autocomplete="username">
+    <input type="password" id="password"    placeholder="密码（至少6位）" autocomplete="current-password">
+    <div id="invite-row" style="display:none;width:100%;max-width:320px">
+      <input type="text" id="invite-code" placeholder="邀请码（注册必填）" style="width:100%">
+    </div>
+    <button class="btn"           onclick="doLogin()">登录</button>
+    <button class="btn btn-secondary" onclick="toggleRegister()">注册账号</button>
+    <div class="error" id="auth-error"></div>
+    <div id="first-user-hint" style="display:none" class="hint">
+      🎉 首位用户无需邀请码，将自动成为管理员
+    </div>
+  </div>
+
+  <!-- ── 聊天页 ── -->
+  <div id="chat-page" style="display:none">
+    <div class="chat-header">
+      <div>
+        <h2>🦞 ClawChat</h2>
+        <div class="status" id="conn-status">连接中...</div>
+      </div>
+      <div class="header-actions">
+        <button id="admin-btn" onclick="location.href='/admin.html'" title="管理控制台" style="display:none">⚙️</button>
+        <button onclick="doLogout()" title="退出">⏻</button>
+      </div>
+    </div>
+
+    <div class="messages" id="messages"></div>
+    <div class="typing" id="typing" style="display:none">
+      AI 正在思考
+      <span class="typing-dots">
+        <span class="typing-dot"></span>
+        <span class="typing-dot"></span>
+        <span class="typing-dot"></span>
+      </span>
+    </div>
+    <div class="chat-error" id="chat-error" style="display:none"></div>
+
+    <!-- 命令面板（输入 / 时弹出） -->
+    <div id="cmd-palette" style="display:none">
+      <div class="cmd-search-wrap">
+        <span class="cmd-search-icon">🔍</span>
+        <input id="cmd-search" placeholder="搜索命令..." autocomplete="off" oninput="filterCommands(this.value)">
+      </div>
+      <div id="cmd-list"></div>
+    </div>
+
+    <!-- 文件预览区 -->
+    <div id="file-preview" style="display:none">
+      <div id="file-preview-content"></div>
+      <button class="file-preview-remove" onclick="clearFilePreview()">✕</button>
+    </div>
+
+    <!-- 表情选择器 -->
+    <div id="emoji-picker" style="display:none">
+      <div class="emoji-categories">
+        <button class="emoji-category active" data-category="face" onclick="setEmojiCategory('face')">😀</button>
+        <button class="emoji-category" data-category="hand" onclick="setEmojiCategory('hand')">👋</button>
+        <button class="emoji-category" data-category="heart" onclick="setEmojiCategory('heart')">❤️</button>
+        <button class="emoji-category" data-category="nature" onclick="setEmojiCategory('nature')">🐶</button>
+        <button class="emoji-category" data-category="object" onclick="setEmojiCategory('object')">⌚</button>
+        <button class="emoji-category" data-category="symbol" onclick="setEmojiCategory('symbol')">✅</button>
+      </div>
+      <div id="emoji-grid" class="emoji-grid"></div>
+    </div>
+
+    <div class="input-area">
+      <button class="attach-btn" onclick="document.getElementById('file-input').click()" title="发送文件">📎</button>
+      <button class="emoji-btn" onclick="showEmojiPicker()" title="表情">😊</button>
+      <input type="file" id="file-input" style="display:none"
+             accept="image/*,video/mp4,video/webm,audio/*,application/pdf,text/plain"
+             onchange="handleFileSelect(this)">
+      <textarea id="input" rows="1"
+                placeholder="输入消息，或 / 查看命令..."
+                onkeydown="handleKey(event)"
+                oninput="handleInput(this)"></textarea>
+      <button class="send-btn" onclick="sendMessage()" title="发送 (Enter)">➤</button>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
