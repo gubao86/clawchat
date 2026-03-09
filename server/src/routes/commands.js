@@ -173,4 +173,86 @@ router.delete('/clear', authMiddleware, (req, res) => {
   res.json({ ok: true });
 });
 
+
+// ── 供 ws-handler 调用的命令执行函数 ────────────────────────────────────────
+export async function parseAndExecCommand(text, userId) {
+  let trimmed = (text || '').trim();
+  if (!trimmed.startsWith('/')) return null;
+
+  // 命令别��映射（兼容 Telegram 风格命令）
+  const ALIASES = {
+    '/models': '/model list',
+    '/models list': '/model list',
+    '/models status': '/model status',
+    '/models set': '/model set',
+    '/models aliases': '/model aliases',
+    '/models fallbacks': '/model fallbacks',
+    '/models scan': '/model scan',
+  };
+  // 检查别名（保留额外参数）
+  for (const [alias, target] of Object.entries(ALIASES)) {
+    if (trimmed === alias || trimmed.startsWith(alias + ' ')) {
+      const extra = trimmed.slice(alias.length);
+      trimmed = target + extra;
+      break;
+    }
+  }
+
+  if (trimmed === '/help') {
+    const grouped = {};
+    for (const c of COMMAND_DEFS) {
+      if (!grouped[c.group]) grouped[c.group] = [];
+      grouped[c.group].push(c);
+    }
+    let output = '📋 可用命令列表：\n\n';
+    for (const [group, cmds] of Object.entries(grouped)) {
+      output += `${group}\n`;
+      for (const c of cmds) output += `  ${c.cmd} — ${c.desc}${c.admin ? ' 🔒' : ''}\n`;
+      output += '\n';
+    }
+    return { matched: true, key: 'help', output };
+  }
+
+  const parts = trimmed.slice(1).split(/\s+/);
+  let bestMatch = null;
+  let bestArgs = [];
+
+  for (const def of COMMAND_DEFS) {
+    const cmdParts = def.cmd.slice(1).split(/\s+/);
+    if (parts.length >= cmdParts.length) {
+      let match = true;
+      for (let i = 0; i < cmdParts.length; i++) {
+        if (parts[i].toLowerCase() !== cmdParts[i].toLowerCase()) { match = false; break; }
+      }
+      if (match && (!bestMatch || cmdParts.length > bestMatch.cmd.slice(1).split(/\s+/).length)) {
+        bestMatch = def;
+        bestArgs = parts.slice(cmdParts.length);
+      }
+    }
+  }
+
+  if (!bestMatch) return { matched: true, key: null, output: `❌ 未知命令: ${trimmed}\n输入 /help 查看所有可用命令` };
+  if (!bestMatch.exec) return { matched: true, key: bestMatch.key, output: `⚠️ 此命令需在终端执行：${bestMatch.terminal}` };
+  if (bestMatch.special && bestMatch.key === 'clear') return { matched: true, key: 'clear', output: '__CLEAR__' };
+  if (bestMatch.special) return { matched: true, key: bestMatch.key, output: '⚠️ 此命令请通过专用接口执行' };
+
+  if (bestMatch.admin) {
+    const user = db.prepare("SELECT role FROM users WHERE id = ?").get(userId);
+    if (user?.role !== 'admin') return { matched: true, key: bestMatch.key, output: '🔒 需要管理员权限' };
+  }
+
+  const safeArgs = bestArgs.map(sanitizeArg).filter(Boolean);
+  const cliArgs = [...bestMatch.cli, ...safeArgs];
+
+  try {
+    const { stdout, stderr } = await execFileAsync('openclaw', cliArgs, {
+      timeout: 20000, maxBuffer: 512 * 1024, env: { ...process.env },
+    });
+    return { matched: true, key: bestMatch.key, output: (stdout || stderr || '（无输出）').trim() };
+  } catch (err) {
+    const out = (err.stdout || err.stderr || err.message || '执行失败').trim();
+    return { matched: true, key: bestMatch.key, output: out };
+  }
+}
+
 export default router;

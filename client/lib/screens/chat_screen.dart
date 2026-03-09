@@ -105,7 +105,14 @@ class _ChatScreenState extends State<ChatScreen> {
       _inputCtrl.clear();
       return;
     }
-    _inputCtrl.text = cmd.cmd + (cmd.argHint != null ? ' ' : '');
+    // 无需参数的命令直接执行
+    if (cmd.argHint == null) {
+      _inputCtrl.clear();
+      _chat.execCommand(cmd.key, [], cmd.cmd);
+      return;
+    }
+    // 需要参数的命令填充到输入框
+    _inputCtrl.text = cmd.cmd + ' ';
     _inputCtrl.selection = TextSelection.fromPosition(
         TextPosition(offset: _inputCtrl.text.length));
     _inputFocus.requestFocus();
@@ -426,7 +433,13 @@ class _ChatScreenState extends State<ChatScreen> {
       _chat.execCommand('terminal', [], cmd.cmd);
       return;
     }
-    _inputCtrl.text = cmd.cmd + (cmd.argHint != null ? ' ' : '');
+    // 无需参数的命令直接执行
+    if (cmd.argHint == null) {
+      _chat.execCommand(cmd.key, [], cmd.cmd);
+      return;
+    }
+    // 需要参数的命令填充到输入框
+    _inputCtrl.text = cmd.cmd + ' ';
     _inputCtrl.selection = TextSelection.fromPosition(
         TextPosition(offset: _inputCtrl.text.length));
     _inputFocus.requestFocus();

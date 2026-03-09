@@ -3,6 +3,7 @@ import { verifyToken } from './auth.js';
 import { streamFromGateway } from './gateway.js';
 import db from './db.js';
 import { v4 as uuid } from 'uuid';
+import { parseAndExecCommand } from './routes/commands.js';
 import logger from './utils/logger.js';
 
 const clients = new Map();
@@ -66,6 +67,36 @@ async function handleMessage(ws, user, msg) {
   // 必须有内容或附件
   if (!content && !fileId) return;
   if (content.length > 50000) return;
+
+  // ── 斜杠命令拦截 ─────────────────────────────────────────────────────────
+  if (content.startsWith('/')) {
+    try {
+      const cmdResult = await parseAndExecCommand(content, user.id);
+      if (cmdResult && cmdResult.matched) {
+        // /clear 特殊处理
+        if (cmdResult.key === 'clear' && cmdResult.output === '__CLEAR__') {
+          const session = db.prepare('SELECT id FROM sessions WHERE user_id = ? AND session_key = ?').get(user.id, sessionKey);
+          if (session) {
+            db.prepare('DELETE FROM messages WHERE user_id = ? AND session_key = ?').run(user.id, sessionKey);
+            broadcast(user.id, { type: 'command_result', command: '/clear', output: '✅ 对话已清空', sessionKey });
+          }
+          return;
+        }
+        // 普通命令：返回结果
+        const cmdMsgId = uuid();
+        db.prepare('INSERT INTO messages (id, user_id, role, content, session_key) VALUES (?, ?, \'user\', ?, ?)').run(cmdMsgId, user.id, content, sessionKey);
+        broadcast(user.id, { type: 'message', id: cmdMsgId, role: 'user', content, sessionKey, ts: Date.now() });
+
+        const resMsgId = uuid();
+        const output = cmdResult.output || '（无输出）';
+        db.prepare('INSERT INTO messages (id, user_id, role, content, session_key) VALUES (?, ?, \'assistant\', ?, ?)').run(resMsgId, user.id, output, sessionKey);
+        broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: output, sessionKey, ts: Date.now() });
+        return;
+      }
+    } catch (err) {
+      logger.error('Command exec error:', err.message);
+    }
+  }
 
   // 校验该 session 属于当前用户
   let session = db.prepare(`SELECT id, title FROM sessions WHERE user_id = ? AND session_key = ?`).get(user.id, sessionKey);
