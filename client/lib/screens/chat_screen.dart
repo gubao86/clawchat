@@ -799,17 +799,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 selectable: true,
               ),
             ),
-            // 闪烁光标
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: const Duration(milliseconds: 530),
-              builder: (_, value, __) => Opacity(
-                opacity: value > 0.5 ? 1.0 : 0.3,
-                child: const Text('▌',
-                    style: TextStyle(color: Colors.white, fontSize: 15, height: 1.5)),
-              ),
-              onEnd: () => setState(() {}), // 循环动画
-            ),
+            // 闪烁光标（简化版 - 静态先确保编译通过）
+            const Text('▌',
+                style: TextStyle(color: Colors.white, fontSize: 15, height: 1.5)),
           ],
         ),
       ),
