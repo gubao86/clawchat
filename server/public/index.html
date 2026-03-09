@@ -46,22 +46,21 @@
     <div class="typing"    id="typing"     style="display:none">AI 正在思考...</div>
     <div class="chat-error" id="chat-error" style="display:none"></div>
 
-    <!-- 命令面板（输入 / 时弹出） -->
-    <div id="cmd-palette" style="display:none">
-      <div class="cmd-search-wrap">
-        <span class="cmd-search-icon">🔍</span>
-        <input id="cmd-search" placeholder="搜索命令..." autocomplete="off" oninput="filterCommands(this.value)">
-      </div>
-      <div id="cmd-list"></div>
-    </div>
-
     <!-- 文件预览区 -->
     <div id="file-preview" style="display:none">
       <div id="file-preview-content"></div>
       <button class="file-preview-remove" onclick="clearFilePreview()">✕</button>
     </div>
 
-    <div class="input-area">
+    <div class="input-area" style="position:relative">
+      <!-- 命令面板（输入 / 时弹出，在输入框正上方） -->
+      <div id="cmd-palette" style="display:none">
+        <div class="cmd-search-wrap">
+          <span class="cmd-search-icon">🔍</span>
+          <input id="cmd-search" placeholder="搜索命令..." autocomplete="off" oninput="filterCommands(this.value)">
+        </div>
+        <div id="cmd-list"></div>
+      </div>
       <button class="attach-btn" onclick="document.getElementById('file-input').click()" title="发送文件">📎</button>
       <input type="file" id="file-input" style="display:none"
              accept="image/*,video/mp4,video/webm,audio/*,application/pdf,text/plain"
