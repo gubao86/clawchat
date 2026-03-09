@@ -6,6 +6,24 @@ import { v4 as uuid } from 'uuid';
 import { parseAndExecCommand } from './routes/commands.js';
 import logger from './utils/logger.js';
 
+/**
+ * Parse and strip <!--buttons:...--> marker from AI response.
+ * Returns { text, buttons } where buttons is a 2D array or null.
+ */
+function parseButtons(fullResponse) {
+  const marker = /<!--buttons:([\s\S]*?)-->/;
+  const match = fullResponse.match(marker);
+  if (!match) return { text: fullResponse, buttons: null };
+  try {
+    const buttons = JSON.parse(match[1]);
+    if (!Array.isArray(buttons)) return { text: fullResponse, buttons: null };
+    const text = fullResponse.replace(marker, '').trim();
+    return { text, buttons };
+  } catch {
+    return { text: fullResponse, buttons: null };
+  }
+}
+
 const clients = new Map();
 
 export function setupWebSocket(server) {
@@ -151,17 +169,18 @@ async function handleMessage(ws, user, msg) {
       fullResponse += chunk;
       broadcast(user.id, { type: 'stream_chunk', id: assistantMsgId, content: chunk, sessionKey });
     }
-    broadcast(user.id, { type: 'stream_end', id: assistantMsgId, sessionKey });
+    const { text: cleanText, buttons: parsedButtons } = parseButtons(fullResponse);
+    broadcast(user.id, { type: 'stream_end', id: assistantMsgId, sessionKey, buttons: parsedButtons });
     db.prepare(`
-      INSERT INTO messages (id, user_id, role, content, session_key) VALUES (?, ?, 'assistant', ?, ?)
-    `).run(assistantMsgId, user.id, fullResponse, sessionKey);
+      INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, 'assistant', ?, ?, ?)
+    `).run(assistantMsgId, user.id, cleanText, parsedButtons ? JSON.stringify(parsedButtons) : null, sessionKey);
 
     // 更新 session updated_at
     db.prepare(`UPDATE sessions SET updated_at = unixepoch() WHERE user_id = ? AND session_key = ?`).run(user.id, sessionKey);
 
     // 自动命名 session：若 title = '新对话'，取 AI 回复前 20 字作为标题
-    if ((session.title === '新对话' || session.title === '') && fullResponse.length > 0) {
-      const autoTitle = fullResponse.slice(0, 20).replace(/\n/g, ' ').trim();
+    if ((session.title === '新对话' || session.title === '') && cleanText.length > 0) {
+      const autoTitle = cleanText.slice(0, 20).replace(/\n/g, ' ').trim();
       const changed = db.prepare(
         `UPDATE sessions SET title = ? WHERE user_id = ? AND session_key = ? AND (title = '新对话' OR title = '')`
       ).run(autoTitle, user.id, sessionKey);
@@ -202,13 +221,14 @@ async function handleCallback(ws, user, msg) {
       fullResponse += chunk;
       broadcast(user.id, { type: 'stream_chunk', id: assistantMsgId, content: chunk, sessionKey });
     }
-    broadcast(user.id, { type: 'stream_end', id: assistantMsgId, sessionKey });
+    const { text: cbCleanText, buttons: cbButtons } = parseButtons(fullResponse);
+    broadcast(user.id, { type: 'stream_end', id: assistantMsgId, sessionKey, buttons: cbButtons });
     db.prepare(`
       INSERT INTO messages (id, user_id, role, content, session_key, callback_data) VALUES (?, ?, 'user', ?, ?, ?)
     `).run(uuid(), user.id, callbackData, sessionKey, callbackData);
     db.prepare(`
-      INSERT INTO messages (id, user_id, role, content, session_key) VALUES (?, ?, 'assistant', ?, ?)
-    `).run(assistantMsgId, user.id, fullResponse, sessionKey);
+      INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, 'assistant', ?, ?, ?)
+    `).run(assistantMsgId, user.id, cbCleanText, cbButtons ? JSON.stringify(cbButtons) : null, sessionKey);
   } catch (err) {
     logger.error('Callback error:', err.message);
     broadcast(user.id, { type: 'error', message: '回调处理失败' });

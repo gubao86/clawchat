@@ -1,3 +1,4 @@
+import 'dart:convert';
 import '../widgets/inline_buttons.dart';
 
 enum MessageType { text, image, video, audio, document, command }
@@ -33,11 +34,15 @@ class ChatMessage {
   static List<List<InlineButton>>? _parseButtons(dynamic raw) {
     if (raw == null) return null;
     try {
-      final List<dynamic> rows = raw is String ? [] : raw;
+      List<dynamic> rows;
       if (raw is String) {
-        // JSON string
-        final decoded = raw;
-        return null; // skip malformed
+        final decoded = jsonDecode(raw);
+        if (decoded is! List) return null;
+        rows = decoded;
+      } else if (raw is List) {
+        rows = raw;
+      } else {
+        return null;
       }
       return rows.map<List<InlineButton>>((row) {
         return (row as List).map<InlineButton>((btn) {

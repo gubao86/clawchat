@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/chat_provider.dart';
 
 class InlineButton {
   final String text;
@@ -21,11 +23,14 @@ class InlineButton {
 class InlineButtonGrid extends StatefulWidget {
   final List<List<InlineButton>> buttons;
   final void Function(String callbackData) onPressed;
+  /// Called externally to reset loading state (e.g. after stream_end)
+  final VoidCallback? onResetLoading;
 
   const InlineButtonGrid({
     super.key,
     required this.buttons,
     required this.onPressed,
+    this.onResetLoading,
   });
 
   @override
@@ -34,6 +39,10 @@ class InlineButtonGrid extends StatefulWidget {
 
 class _InlineButtonGridState extends State<InlineButtonGrid> {
   String? _loadingCallback;
+
+  void resetLoading() {
+    if (mounted) setState(() => _loadingCallback = null);
+  }
 
   Color _bgColor(String style) {
     switch (style) {
@@ -64,6 +73,13 @@ class _InlineButtonGridState extends State<InlineButtonGrid> {
 
   @override
   Widget build(BuildContext context) {
+    // Auto-reset loading when streaming ends
+    final isStreaming = context.watch<ChatProvider>().isStreaming;
+    if (!isStreaming && _loadingCallback != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _loadingCallback = null);
+      });
+    }
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Column(

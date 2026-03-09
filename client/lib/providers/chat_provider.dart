@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../services/command_service.dart';
 import '../services/session_service.dart';
 import '../services/ws_service.dart';
+import '../widgets/inline_buttons.dart';
 
 class ChatProvider extends ChangeNotifier {
   final WsService _ws = WsService();
@@ -90,12 +91,24 @@ class ChatProvider extends ChangeNotifier {
       case 'stream_end':
         final endKey = msg['sessionKey'] ?? 'main';
         if (endKey == _currentSessionKey) {
+          // Parse buttons from ws msg (server strips them from text)
+          final rawButtons = msg['buttons'];
+          List<List<InlineButton>>? parsedButtons;
+          if (rawButtons != null) {
+            try {
+              parsedButtons = (rawButtons as List).map<List<InlineButton>>((row) {
+                return (row as List).map<InlineButton>((btn) =>
+                  InlineButton.fromJson(btn as Map<String, dynamic>)
+                ).toList();
+              }).toList();
+            } catch (_) {}
+          }
           _messages.add(ChatMessage(
             id: _streamId ?? '',
             role: 'assistant',
             content: _streamBuffer,
             createdAt: DateTime.now(),
-            buttons: msg['buttons'] != null ? ChatMessage.fromWs({'id':'','role':'assistant','content':'','buttons':msg['buttons']}).buttons : null,
+            buttons: parsedButtons,
           ));
           _isStreaming = false;
           _streamBuffer = '';
