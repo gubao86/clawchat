@@ -199,18 +199,13 @@ export async function parseAndExecCommand(text, userId) {
   }
 
   if (trimmed === '/help') {
-    const grouped = {};
-    for (const c of COMMAND_DEFS) {
-      if (!grouped[c.group]) grouped[c.group] = [];
-      grouped[c.group].push(c);
-    }
-    let output = '📋 可用命令列表：\n\n';
-    for (const [group, cmds] of Object.entries(grouped)) {
-      output += `${group}\n`;
-      for (const c of cmds) output += `  ${c.cmd} — ${c.desc}${c.admin ? ' 🔒' : ''}\n`;
-      output += '\n';
-    }
-    return { matched: true, key: 'help', output };
+    return buildHelpWithButtons();
+  }
+
+  // help_group_<group> callback
+  if (trimmed.startsWith('/help_group_')) {
+    const group = decodeURIComponent(trimmed.slice('/help_group_'.length));
+    return buildHelpGroupDetail(group);
   }
 
   const parts = trimmed.slice(1).split(/\s+/);
@@ -258,6 +253,46 @@ export async function parseAndExecCommand(text, userId) {
     const out = (err.stdout || err.stderr || err.message || '执行失败').trim();
     return { matched: true, key: bestMatch.key, output: out };
   }
+}
+
+/**
+ * Build /help with group buttons
+ */
+function buildHelpWithButtons() {
+  const grouped = {};
+  for (const c of COMMAND_DEFS) {
+    if (!grouped[c.group]) grouped[c.group] = [];
+    grouped[c.group].push(c);
+  }
+  const groups = Object.keys(grouped);
+  const buttons = [];
+  for (let i = 0; i < groups.length; i += 2) {
+    const row = [];
+    row.push({ text: `${groups[i]} (${grouped[groups[i]].length})`, callback_data: `help_group_${groups[i]}`, style: 'primary' });
+    if (i + 1 < groups.length) {
+      row.push({ text: `${groups[i+1]} (${grouped[groups[i+1]].length})`, callback_data: `help_group_${groups[i+1]}`, style: 'primary' });
+    }
+    buttons.push(row);
+  }
+  return { matched: true, key: 'help', output: '📋 选择一个分组查看命令：', buttons };
+}
+
+function buildHelpGroupDetail(group) {
+  const cmds = COMMAND_DEFS.filter(c => c.group === group);
+  if (cmds.length === 0) return { matched: true, key: 'help', output: '未找到该分组' };
+
+  let output = `${group}\n\n`;
+  for (const c of cmds) {
+    output += `\`${c.cmd}\` — ${c.desc}${c.admin ? ' 🔒' : ''}\n`;
+  }
+
+  // Add command buttons for executable ones
+  const buttons = cmds
+    .filter(c => c.exec && !c.special && !c.argHint)
+    .map(c => [{ text: c.cmd, callback_data: c.cmd, style: c.admin ? 'danger' : 'default' }]);
+  buttons.push([{ text: '<< 返回帮助', callback_data: 'help_back', style: 'danger' }]);
+
+  return { matched: true, key: 'help', output, buttons };
 }
 
 /**

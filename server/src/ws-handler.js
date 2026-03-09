@@ -200,7 +200,37 @@ async function handleCallback(ws, user, msg) {
   const sessionKey   = msg.sessionKey || 'main';
   if (!callbackData) return;
 
-  // ── Intercept command callbacks (mdl_provider_, mdl_sel_, etc.) ──
+  // ── Intercept command callbacks ──
+  // Help group callbacks
+  if (callbackData.startsWith('help_group_') || callbackData === 'help_back') {
+    const { parseAndExecCommand } = await import('./routes/commands.js');
+    const cmd = callbackData === 'help_back' ? '/help' : `/help_group_${callbackData.slice('help_group_'.length)}`;
+    const result = await parseAndExecCommand(cmd, user.id);
+    if (result && result.matched) {
+      const resMsgId = uuid();
+      db.prepare("INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, 'assistant', ?, ?, ?)").run(
+        resMsgId, user.id, result.output, result.buttons ? JSON.stringify(result.buttons) : null, sessionKey
+      );
+      broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: result.output, buttons: result.buttons, sessionKey, ts: Date.now() });
+      return;
+    }
+  }
+
+  // Command execution callbacks (clicking a command button like /status)
+  if (callbackData.startsWith('/') && !callbackData.startsWith('/help')) {
+    const { parseAndExecCommand } = await import('./routes/commands.js');
+    const result = await parseAndExecCommand(callbackData, user.id);
+    if (result && result.matched) {
+      const resMsgId = uuid();
+      db.prepare("INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, 'assistant', ?, ?, ?)").run(
+        resMsgId, user.id, result.output, result.buttons ? JSON.stringify(result.buttons) : null, sessionKey
+      );
+      broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: result.output, buttons: result.buttons, sessionKey, ts: Date.now() });
+      return;
+    }
+  }
+
+  // Model menu callbacks
   if (callbackData.startsWith('mdl_')) {
     const result = await handleModelCallback(callbackData, user.id);
     if (result) {
