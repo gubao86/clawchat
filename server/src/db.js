@@ -98,3 +98,19 @@ for (const u of usersWithoutSession) {
 }
 
 export default db;
+
+// ── v2 迁移：users 表添加 agent_id，messages 表添加 buttons/callback_data ──
+const v2Migrations = [
+  "ALTER TABLE users ADD COLUMN agent_id TEXT",
+  "ALTER TABLE users ADD COLUMN model_override TEXT",
+  "ALTER TABLE messages ADD COLUMN buttons TEXT",
+  "ALTER TABLE messages ADD COLUMN callback_data TEXT",
+];
+v2Migrations.forEach(sql => { try { db.exec(sql); } catch {} });
+
+// 迁移：为已有用户设置 agent_id
+const usersWithoutAgent = db.prepare("SELECT id, role FROM users WHERE agent_id IS NULL").all();
+for (const u of usersWithoutAgent) {
+  const agentId = u.role === 'admin' ? 'main' : `clawchat-${u.id}`;
+  db.prepare("UPDATE users SET agent_id = ? WHERE id = ?").run(agentId, u.id);
+}

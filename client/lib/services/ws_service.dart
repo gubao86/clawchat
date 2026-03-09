@@ -61,6 +61,14 @@ class WsService {
     });
   }
 
+  void sendCallback(String callbackData, {String? sessionKey}) {
+    send({
+      'type': 'callback',
+      'callbackData': callbackData,
+      if (sessionKey != null) 'sessionKey': sessionKey,
+    });
+  }
+
   void dispose() {
     _disposed = true;
     _reconnectTimer?.cancel();

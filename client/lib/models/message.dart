@@ -1,3 +1,5 @@
+import '../widgets/inline_buttons.dart';
+
 enum MessageType { text, image, video, audio, document, command }
 
 class ChatMessage {
@@ -12,6 +14,8 @@ class ChatMessage {
   final String? fileMime;
   // 命令结果相关
   final bool? cmdSuccess;
+  // v2: inline buttons
+  final List<List<InlineButton>>? buttons;
 
   const ChatMessage({
     required this.id,
@@ -23,7 +27,27 @@ class ChatMessage {
     this.fileName,
     this.fileMime,
     this.cmdSuccess,
+    this.buttons,
   });
+
+  static List<List<InlineButton>>? _parseButtons(dynamic raw) {
+    if (raw == null) return null;
+    try {
+      final List<dynamic> rows = raw is String ? [] : raw;
+      if (raw is String) {
+        // JSON string
+        final decoded = raw;
+        return null; // skip malformed
+      }
+      return rows.map<List<InlineButton>>((row) {
+        return (row as List).map<InlineButton>((btn) {
+          return InlineButton.fromJson(btn as Map<String, dynamic>);
+        }).toList();
+      }).toList();
+    } catch (_) {
+      return null;
+    }
+  }
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     MessageType type = MessageType.text;
@@ -42,6 +66,7 @@ class ChatMessage {
       type:      type,
       fileId:    json['file_id'],
       fileName:  json['file_name'],
+      buttons:   _parseButtons(json['buttons']),
     );
   }
 
@@ -64,6 +89,7 @@ class ChatMessage {
       fileId:    msg['fileId'],
       fileName:  msg['fileName'],
       fileMime:  msg['fileMime'],
+      buttons:   _parseButtons(msg['buttons']),
     );
   }
 

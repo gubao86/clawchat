@@ -6,6 +6,7 @@ import { signToken, authMiddleware } from '../auth.js';
 import db from '../db.js';
 import rateLimit from 'express-rate-limit';
 import config from '../config.js';
+import { getAgentId, createAgent } from '../agent-manager.js';
 
 const router = Router();
 const limiter = rateLimit(config.authRateLimit);
@@ -51,6 +52,11 @@ router.post('/register', limiter, (req, res) => {
     db.prepare(`INSERT INTO users (id, username, password_hash, role, status, invited_by) VALUES (?, ?, ?, 'user', 'active', ?)`
     ).run(id, username, hash, code.created_by);
 
+    // v2: Create agent for user
+    const agentId = getAgentId(id, 'user');
+    db.prepare('UPDATE users SET agent_id = ? WHERE id = ?').run(agentId, id);
+    createAgent(agentId).catch(err => console.error('Agent creation failed:', err));
+
     // 消耗邀请码次数
     db.prepare("UPDATE invite_codes SET use_count = use_count + 1, used_by = ?, used_at = ? WHERE code = ?")
       .run(id, now, code.code);
@@ -72,6 +78,9 @@ router.post('/register', limiter, (req, res) => {
   const hash = hashSync(password, 12);
   db.prepare(`INSERT INTO users (id, username, password_hash, role, status) VALUES (?, ?, ?, 'admin', 'active')`
   ).run(id, username, hash);
+
+  // v2: Admin uses main agent
+  db.prepare('UPDATE users SET agent_id = ? WHERE id = ?').run('main', id);
 
   // 创建 main session
   try {

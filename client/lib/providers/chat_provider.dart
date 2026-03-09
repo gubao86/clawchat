@@ -95,6 +95,7 @@ class ChatProvider extends ChangeNotifier {
             role: 'assistant',
             content: _streamBuffer,
             createdAt: DateTime.now(),
+            buttons: msg['buttons'] != null ? ChatMessage.fromWs({'id':'','role':'assistant','content':'','buttons':msg['buttons']}).buttons : null,
           ));
           _isStreaming = false;
           _streamBuffer = '';
@@ -182,6 +183,10 @@ class ChatProvider extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  void sendCallback(String callbackData) {
+    _ws.sendCallback(callbackData, sessionKey: _currentSessionKey);
   }
 
   void sendMessage(String content, {

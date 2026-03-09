@@ -1,9 +1,9 @@
 import config from './config.js';
 import logger from './utils/logger.js';
 
-export async function sendToGateway(messages, { stream = false, sessionUser = 'clawchat' } = {}) {
+export async function sendToGateway(messages, { stream = false, sessionUser = 'clawchat', agentId = 'main' } = {}) {
   const url = `${config.gateway.url}/v1/chat/completions`;
-  const body = { model: 'openclaw:main', messages, stream, user: sessionUser };
+  const body = { model: `openclaw:${agentId}`, messages, stream, user: sessionUser };
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -23,8 +23,8 @@ export async function sendToGateway(messages, { stream = false, sessionUser = 'c
   return data.choices?.[0]?.message?.content || '';
 }
 
-export async function* streamFromGateway(messages, sessionUser = 'clawchat') {
-  const res = await sendToGateway(messages, { stream: true, sessionUser });
+export async function* streamFromGateway(messages, sessionUser = 'clawchat', agentId = 'main') {
+  const res = await sendToGateway(messages, { stream: true, sessionUser, agentId });
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';

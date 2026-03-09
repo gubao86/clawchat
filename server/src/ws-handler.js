@@ -42,6 +42,7 @@ export function setupWebSocket(server) {
       if (!user) return ws.send(JSON.stringify({ error: 'Not authenticated' }));
 
       if (msg.type === 'message') await handleMessage(ws, user, msg);
+      if (msg.type === 'callback') await handleCallback(ws, user, msg);
     });
 
     ws.on('close', () => {
@@ -98,6 +99,10 @@ async function handleMessage(ws, user, msg) {
     }
   }
 
+  // v2: 获取用户的 agent_id
+  const userRecord = db.prepare('SELECT agent_id, role FROM users WHERE id = ?').get(user.id);
+  const agentId = userRecord?.agent_id || (userRecord?.role === 'admin' ? 'main' : `clawchat-${user.id}`);
+
   // 校验该 session 属于当前用户
   let session = db.prepare(`SELECT id, title FROM sessions WHERE user_id = ? AND session_key = ?`).get(user.id, sessionKey);
   if (!session) {
@@ -142,7 +147,7 @@ async function handleMessage(ws, user, msg) {
   let fullResponse = '';
   try {
     broadcast(user.id, { type: 'stream_start', id: assistantMsgId, sessionKey });
-    for await (const chunk of streamFromGateway(aiHistory, `clawchat:${user.id}:${sessionKey}`)) {
+    for await (const chunk of streamFromGateway(aiHistory, `clawchat:${user.id}:${sessionKey}`, agentId)) {
       fullResponse += chunk;
       broadcast(user.id, { type: 'stream_chunk', id: assistantMsgId, content: chunk, sessionKey });
     }
@@ -167,6 +172,46 @@ async function handleMessage(ws, user, msg) {
   } catch (err) {
     logger.error('Gateway stream error:', err.message);
     broadcast(user.id, { type: 'error', message: 'AI 回复失败，请重试' });
+  }
+}
+
+async function handleCallback(ws, user, msg) {
+  const callbackData = (msg.callbackData || '').trim();
+  const sessionKey   = msg.sessionKey || 'main';
+  if (!callbackData) return;
+
+  // Get user's agent_id
+  const userRecord = db.prepare('SELECT agent_id, role FROM users WHERE id = ?').get(user.id);
+  const agentId = userRecord?.agent_id || (userRecord?.role === 'admin' ? 'main' : `clawchat-${user.id}`);
+
+  // Send callback as a user message to the AI
+  const history = db.prepare(`
+    SELECT role, content FROM messages
+    WHERE user_id = ? AND session_key = ?
+    ORDER BY created_at DESC LIMIT 20
+  `).all(user.id, sessionKey).reverse();
+
+  // Add callback as user message
+  history.push({ role: 'user', content: callbackData });
+
+  const assistantMsgId = uuid();
+  let fullResponse = '';
+  try {
+    broadcast(user.id, { type: 'stream_start', id: assistantMsgId, sessionKey });
+    for await (const chunk of streamFromGateway(history, `clawchat:${user.id}:${sessionKey}`, agentId)) {
+      fullResponse += chunk;
+      broadcast(user.id, { type: 'stream_chunk', id: assistantMsgId, content: chunk, sessionKey });
+    }
+    broadcast(user.id, { type: 'stream_end', id: assistantMsgId, sessionKey });
+    db.prepare(`
+      INSERT INTO messages (id, user_id, role, content, session_key, callback_data) VALUES (?, ?, 'user', ?, ?, ?)
+    `).run(uuid(), user.id, callbackData, sessionKey, callbackData);
+    db.prepare(`
+      INSERT INTO messages (id, user_id, role, content, session_key) VALUES (?, ?, 'assistant', ?, ?)
+    `).run(assistantMsgId, user.id, fullResponse, sessionKey);
+  } catch (err) {
+    logger.error('Callback error:', err.message);
+    broadcast(user.id, { type: 'error', message: '回调处理失败' });
   }
 }
 

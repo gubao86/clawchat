@@ -20,6 +20,7 @@ import '../services/auth_service.dart';
 import '../services/command_service.dart';
 import '../services/session_service.dart';
 import '../models/message.dart';
+import '../widgets/inline_buttons.dart';
 import '../config.dart';
 import 'login_screen.dart';
 import 'settings_screen.dart';
@@ -734,11 +735,11 @@ class _ChatScreenState extends State<ChatScreen> {
       case MessageType.document: return _buildFileBubble(m, Icons.description, Colors.blue);
       case MessageType.command:  return _buildCommandBubble(m);
       case MessageType.text:
-      default:                   return _buildTextBubble(m.role, m.content);
+      default:                   return _buildTextBubble(m.role, m.content, buttons: m.buttons);
     }
   }
 
-  Widget _buildTextBubble(String role, String content) {
+  Widget _buildTextBubble(String role, String content, {List<List<InlineButton>>? buttons}) {
     final isUser = role == 'user';
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -755,24 +756,35 @@ class _ChatScreenState extends State<ChatScreen> {
             bottomRight: Radius.circular(isUser ? 3 : 14),
           ),
         ),
-        child: isUser
-            ? SelectableText(content,
-                style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.5))
-            : MarkdownBody(
-                data: content,
-                styleSheet: MarkdownStyleSheet(
-                  p: const TextStyle(color: Colors.white, fontSize: 15, height: 1.5),
-                  code: const TextStyle(color: Color(0xFF93C5FD), fontFamily: 'monospace', fontSize: 13),
-                  codeblockDecoration: BoxDecoration(
-                    color: const Color(0xFF111827),
-                    borderRadius: BorderRadius.circular(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (content.isNotEmpty)
+              isUser
+                ? SelectableText(content,
+                    style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.5))
+                : MarkdownBody(
+                    data: content,
+                    styleSheet: MarkdownStyleSheet(
+                      p: const TextStyle(color: Colors.white, fontSize: 15, height: 1.5),
+                      code: const TextStyle(color: Color(0xFF93C5FD), fontFamily: 'monospace', fontSize: 13),
+                      codeblockDecoration: BoxDecoration(
+                        color: const Color(0xFF111827),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      blockquoteDecoration: const BoxDecoration(
+                        border: Border(left: BorderSide(color: Color(0xFFE94560), width: 3)),
+                      ),
+                    ),
+                    selectable: true,
                   ),
-                  blockquoteDecoration: const BoxDecoration(
-                    border: Border(left: BorderSide(color: Color(0xFFE94560), width: 3)),
-                  ),
-                ),
-                selectable: true,
+            if (buttons != null && buttons.isNotEmpty)
+              InlineButtonGrid(
+                buttons: buttons,
+                onPressed: (callbackData) => _chat.sendCallback(callbackData),
               ),
+          ],
+        ),
       ),
     );
   }
