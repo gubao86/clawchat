@@ -101,22 +101,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _selectCommand(CommandDef cmd) {
     setState(() { _showCmdPalette = false; });
-    if (!cmd.exec && cmd.terminal != null) {
-      _chat.execCommand('terminal', [], cmd.cmd);
-      _inputCtrl.clear();
-      return;
-    }
-    // 无需参数的命令直接执行
-    if (cmd.argHint == null) {
-      _inputCtrl.clear();
-      _chat.execCommand(cmd.key, [], cmd.cmd);
-      return;
-    }
     // 需要参数的命令填充到输入框
-    _inputCtrl.text = cmd.cmd + ' ';
-    _inputCtrl.selection = TextSelection.fromPosition(
-        TextPosition(offset: _inputCtrl.text.length));
-    _inputFocus.requestFocus();
+    if (cmd.argHint != null) {
+      _inputCtrl.text = cmd.cmd + ' ';
+      _inputCtrl.selection = TextSelection.fromPosition(
+          TextPosition(offset: _inputCtrl.text.length));
+      _inputFocus.requestFocus();
+      return;
+    }
+    // 无参数命令：通过 WS 发送，服务端返回带 buttons 的响应
+    _inputCtrl.clear();
+    _chat.sendMessage(cmd.cmd);
   }
 
   // ── 发送 ──────────────────────────────────────────────────────────────────
@@ -152,33 +147,16 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _handleCommand(String text) async {
-    final parts   = text.trim().split(RegExp(r'\s+'));
-    final cmdStr  = parts[0].toLowerCase();
-    final sub     = parts.length > 1 ? parts[1].toLowerCase() : '';
-    final args    = parts.length > 2 ? parts.sublist(2) : <String>[];
-    final fullCmd = sub.isNotEmpty ? '$cmdStr $sub' : cmdStr;
+    final trimmed = text.trim().toLowerCase();
 
-    if (cmdStr == '/help') { await _chat.execCommand('help', [], '/help'); return; }
-    if (cmdStr == '/clear') { await _chat.execCommand('clear', [], '/clear'); return; }
-
-    final def = CommandService.commands.firstWhere(
-      (c) => c.cmd.toLowerCase() == fullCmd,
-      orElse: () => CommandService.commands.firstWhere(
-        (c) => c.cmd.toLowerCase() == cmdStr,
-        orElse: () => const CommandDef(key:'', cmd:'', desc:'未知命令', group:'', exec:false),
-      ),
-    );
-
-    if (def.key.isEmpty) {
-      _chat.execCommand('error', [], '$text → 未知命令，输入 /help 查看列表');
+    // /clear 需要本地处理（清除消息列表）
+    if (trimmed == '/clear') {
+      await _chat.execCommand('clear', [], '/clear');
       return;
     }
-    if (!def.exec) {
-      final terminal = def.terminal ?? 'openclaw ${def.key.replaceAll(":", " ")}';
-      _chat.execCommand('terminal', [], '${def.cmd}\n\n此命令需在终端执行：\n$terminal');
-      return;
-    }
-    await _chat.execCommand(def.key, args, def.cmd);
+
+    // 所有其他命令通过 WS 发送，服务端返回带 buttons 的响应
+    _chat.sendMessage(text.trim());
   }
 
   // ── 附件选择 ─────────────────────────────────────────────────────────────
@@ -430,20 +408,16 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _selectCommandDirect(CommandDef cmd) {
-    if (!cmd.exec && cmd.terminal != null) {
-      _chat.execCommand('terminal', [], cmd.cmd);
-      return;
-    }
-    // 无需参数的命令直接执行
-    if (cmd.argHint == null) {
-      _chat.execCommand(cmd.key, [], cmd.cmd);
-      return;
-    }
     // 需要参数的命令填充到输入框
-    _inputCtrl.text = cmd.cmd + ' ';
-    _inputCtrl.selection = TextSelection.fromPosition(
-        TextPosition(offset: _inputCtrl.text.length));
-    _inputFocus.requestFocus();
+    if (cmd.argHint != null) {
+      _inputCtrl.text = cmd.cmd + ' ';
+      _inputCtrl.selection = TextSelection.fromPosition(
+          TextPosition(offset: _inputCtrl.text.length));
+      _inputFocus.requestFocus();
+      return;
+    }
+    // 无参数命令：通过 WS 发送
+    _chat.sendMessage(cmd.cmd);
   }
 
   // ── 消息长按菜单 ─────────────────────────────────────────────────────────

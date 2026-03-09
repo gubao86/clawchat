@@ -4,6 +4,7 @@ import { streamFromGateway } from './gateway.js';
 import db from './db.js';
 import { v4 as uuid } from 'uuid';
 import { parseAndExecCommand } from './routes/commands.js';
+import { buildHelpButtons, buildGroupDetail, execCommand } from './command-discovery.js';
 import logger from './utils/logger.js';
 
 /**
@@ -90,26 +91,41 @@ async function handleMessage(ws, user, msg) {
   // ── 斜杠命令拦截 ─────────────────────────────────────────────────────────
   if (content.startsWith('/')) {
     try {
+      // /clear 特殊处理
+      if (content.trim() === '/clear') {
+        db.prepare('DELETE FROM messages WHERE user_id = ? AND session_key = ?').run(user.id, sessionKey);
+        broadcast(user.id, { type: 'command_result', command: '/clear', output: '✅ 对话已清空', sessionKey });
+        return;
+      }
+
+      // /help → 动态命令分组按钮
+      if (content.trim() === '/help') {
+        const cmdMsgId = uuid();
+        db.prepare("INSERT INTO messages (id, user_id, role, content, session_key) VALUES (?, ?, 'user', ?, ?)").run(cmdMsgId, user.id, content, sessionKey);
+        broadcast(user.id, { type: 'message', id: cmdMsgId, role: 'user', content, sessionKey, ts: Date.now() });
+
+        const result = await buildHelpButtons();
+        const resMsgId = uuid();
+        db.prepare("INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, 'assistant', ?, ?, ?)").run(
+          resMsgId, user.id, result.output, result.buttons ? JSON.stringify(result.buttons) : null, sessionKey
+        );
+        broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: result.output, buttons: result.buttons, sessionKey, ts: Date.now() });
+        return;
+      }
+
+      // 其他斜杠命令：先尝试静态命令（兼容），再尝试直接执行
       const cmdResult = await parseAndExecCommand(content, user.id);
       if (cmdResult && cmdResult.matched) {
-        // /clear 特殊处理
-        if (cmdResult.key === 'clear' && cmdResult.output === '__CLEAR__') {
-          const session = db.prepare('SELECT id FROM sessions WHERE user_id = ? AND session_key = ?').get(user.id, sessionKey);
-          if (session) {
-            db.prepare('DELETE FROM messages WHERE user_id = ? AND session_key = ?').run(user.id, sessionKey);
-            broadcast(user.id, { type: 'command_result', command: '/clear', output: '✅ 对话已清空', sessionKey });
-          }
-          return;
-        }
-        // 普通命令：返回结果
         const cmdMsgId = uuid();
-        db.prepare('INSERT INTO messages (id, user_id, role, content, session_key) VALUES (?, ?, \'user\', ?, ?)').run(cmdMsgId, user.id, content, sessionKey);
+        db.prepare("INSERT INTO messages (id, user_id, role, content, session_key) VALUES (?, ?, 'user', ?, ?)").run(cmdMsgId, user.id, content, sessionKey);
         broadcast(user.id, { type: 'message', id: cmdMsgId, role: 'user', content, sessionKey, ts: Date.now() });
 
         const resMsgId = uuid();
         const output = cmdResult.output || '（无输出）';
         const cmdButtons = cmdResult.buttons || null;
-        db.prepare('INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, \'assistant\', ?, ?, ?)').run(resMsgId, user.id, output, cmdButtons ? JSON.stringify(cmdButtons) : null, sessionKey);
+        db.prepare("INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, 'assistant', ?, ?, ?)").run(
+          resMsgId, user.id, output, cmdButtons ? JSON.stringify(cmdButtons) : null, sessionKey
+        );
         broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: output, buttons: cmdButtons, sessionKey, ts: Date.now() });
         return;
       }
@@ -200,34 +216,52 @@ async function handleCallback(ws, user, msg) {
   const sessionKey   = msg.sessionKey || 'main';
   if (!callbackData) return;
 
-  // ── Intercept command callbacks ──
-  // Help group callbacks
-  if (callbackData.startsWith('help_group_') || callbackData === 'help_back') {
-    const { parseAndExecCommand } = await import('./routes/commands.js');
-    const cmd = callbackData === 'help_back' ? '/help' : `/help_group_${callbackData.slice('help_group_'.length)}`;
-    const result = await parseAndExecCommand(cmd, user.id);
-    if (result && result.matched) {
-      const resMsgId = uuid();
-      db.prepare("INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, 'assistant', ?, ?, ?)").run(
-        resMsgId, user.id, result.output, result.buttons ? JSON.stringify(result.buttons) : null, sessionKey
-      );
-      broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: result.output, buttons: result.buttons, sessionKey, ts: Date.now() });
-      return;
-    }
+  // ── Dynamic command callbacks ──
+
+  // cmd_help_back → back to help groups
+  if (callbackData === 'cmd_help_back') {
+    const result = await buildHelpButtons();
+    const resMsgId = uuid();
+    db.prepare("INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, 'assistant', ?, ?, ?)").run(
+      resMsgId, user.id, result.output, result.buttons ? JSON.stringify(result.buttons) : null, sessionKey
+    );
+    broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: result.output, buttons: result.buttons, sessionKey, ts: Date.now() });
+    return;
   }
 
-  // Command execution callbacks (clicking a command button like /status)
-  if (callbackData.startsWith('/') && !callbackData.startsWith('/help')) {
-    const { parseAndExecCommand } = await import('./routes/commands.js');
-    const result = await parseAndExecCommand(callbackData, user.id);
-    if (result && result.matched) {
-      const resMsgId = uuid();
-      db.prepare("INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, 'assistant', ?, ?, ?)").run(
-        resMsgId, user.id, result.output, result.buttons ? JSON.stringify(result.buttons) : null, sessionKey
-      );
-      broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: result.output, buttons: result.buttons, sessionKey, ts: Date.now() });
-      return;
-    }
+  // cmd_group_<name> → show group detail
+  if (callbackData.startsWith('cmd_group_')) {
+    const groupName = callbackData.slice('cmd_group_'.length);
+    const result = await buildGroupDetail(groupName);
+    const resMsgId = uuid();
+    db.prepare("INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, 'assistant', ?, ?, ?)").run(
+      resMsgId, user.id, result.output, result.buttons ? JSON.stringify(result.buttons) : null, sessionKey
+    );
+    broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: result.output, buttons: result.buttons, sessionKey, ts: Date.now() });
+    return;
+  }
+
+  // cmd_exec_<args> → execute openclaw command
+  if (callbackData.startsWith('cmd_exec_')) {
+    const args = callbackData.slice('cmd_exec_'.length).split(/\s+/);
+    const result = await execCommand(args);
+    const resMsgId = uuid();
+    db.prepare("INSERT INTO messages (id, user_id, role, content, session_key) VALUES (?, ?, 'assistant', ?, ?)").run(
+      resMsgId, user.id, result.output, sessionKey
+    );
+    broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: result.output, sessionKey, ts: Date.now() });
+    return;
+  }
+
+  // Legacy help callbacks (compat)
+  if (callbackData.startsWith('help_group_') || callbackData === 'help_back') {
+    const result = callbackData === 'help_back' ? await buildHelpButtons() : await buildGroupDetail(callbackData.slice('help_group_'.length));
+    const resMsgId = uuid();
+    db.prepare("INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, 'assistant', ?, ?, ?)").run(
+      resMsgId, user.id, result.output, result.buttons ? JSON.stringify(result.buttons) : null, sessionKey
+    );
+    broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: result.output, buttons: result.buttons, sessionKey, ts: Date.now() });
+    return;
   }
 
   // Model menu callbacks

@@ -67,9 +67,12 @@ class ChatProvider extends ChangeNotifier {
         break;
       case 'message':
         final msgSessionKey = msg['sessionKey'] ?? 'main';
-        if (msgSessionKey == _currentSessionKey && msg['role'] == 'user') {
-          _messages.add(ChatMessage.fromWs(msg));
-          notifyListeners();
+        if (msgSessionKey == _currentSessionKey) {
+          final role = msg['role'] ?? 'user';
+          if (role == 'user' || role == 'assistant') {
+            _messages.add(ChatMessage.fromWs(msg));
+            notifyListeners();
+          }
         }
         break;
       case 'stream_start':

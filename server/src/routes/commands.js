@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import discovery from '../command-discovery.js';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { authMiddleware } from '../auth.js';
@@ -124,12 +125,18 @@ function sanitizeArg(arg) {
   return /^[\w\-_./@:, ]{1,200}$/.test(arg) ? arg : null;
 }
 
-// 提供命令定义列表给前端
-router.get('/list', authMiddleware, (req, res) => {
+// 提供命���定义列表给前端（静态 + 动态）
+router.get('/list', authMiddleware, async (req, res) => {
   const user = db.prepare("SELECT role FROM users WHERE id = ?").get(req.user.id);
   const isAdmin = user?.role === 'admin';
-  // 非管理员过滤掉仅管理员命令（但仍展示，只是标记 locked）
-  res.json({ ok: true, commands: COMMAND_DEFS, isAdmin });
+
+  // Dynamic commands from OpenClaw CLI
+  let dynamicCommands = [];
+  try {
+    dynamicCommands = await discovery.buildHelpButtons();
+  } catch (_) {}
+
+  res.json({ ok: true, commands: COMMAND_DEFS, dynamicCommands, isAdmin });
 });
 
 // 执行命令
