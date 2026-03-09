@@ -241,6 +241,11 @@ export async function parseAndExecCommand(text, userId) {
     if (user?.role !== 'admin') return { matched: true, key: bestMatch.key, output: '🔒 需要管理员权限' };
   }
 
+  // ── Interactive model menu ──────────────────────────────────────────────
+  if (bestMatch.key === 'model:list') {
+    return await buildModelListWithButtons();
+  }
+
   const safeArgs = bestArgs.map(sanitizeArg).filter(Boolean);
   const cliArgs = [...bestMatch.cli, ...safeArgs];
 
@@ -252,6 +257,55 @@ export async function parseAndExecCommand(text, userId) {
   } catch (err) {
     const out = (err.stdout || err.stderr || err.message || '执行失败').trim();
     return { matched: true, key: bestMatch.key, output: out };
+  }
+}
+
+/**
+ * Build interactive model list with provider-grouped inline buttons
+ */
+async function buildModelListWithButtons() {
+  try {
+    const { stdout } = await execFileAsync('openclaw', ['models', 'list'], {
+      timeout: 15000, maxBuffer: 512 * 1024, env: { ...process.env },
+    });
+
+    // Parse models from output
+    const lines = stdout.split('\n').slice(1).filter(l => l.trim());
+    const providers = {};
+    for (const line of lines) {
+      const model = line.trim().split(/\s+/)[0];
+      if (!model || model === 'Model') continue;
+      const slash = model.indexOf('/');
+      if (slash < 0) continue;
+      const provider = model.slice(0, slash);
+      if (!providers[provider]) providers[provider] = [];
+      providers[provider].push(model);
+    }
+
+    const providerNames = Object.keys(providers);
+    if (providerNames.length === 0) {
+      return { matched: true, key: 'model:list', output: '没有可用模型' };
+    }
+
+    // Build provider buttons (2 per row)
+    const buttons = [];
+    for (let i = 0; i < providerNames.length; i += 2) {
+      const row = [];
+      row.push({ text: `${providerNames[i]} (${providers[providerNames[i]].length})`, callback_data: `mdl_provider_${providerNames[i]}`, style: 'primary' });
+      if (i + 1 < providerNames.length) {
+        row.push({ text: `${providerNames[i+1]} (${providers[providerNames[i+1]].length})`, callback_data: `mdl_provider_${providerNames[i+1]}`, style: 'primary' });
+      }
+      buttons.push(row);
+    }
+
+    return {
+      matched: true,
+      key: 'model:list',
+      output: '🤖 选择一个 Provider 查看模型：',
+      buttons,
+    };
+  } catch (err) {
+    return { matched: true, key: 'model:list', output: `获取模型列表失败: ${err.message}` };
   }
 }
 

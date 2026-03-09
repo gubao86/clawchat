@@ -108,8 +108,9 @@ async function handleMessage(ws, user, msg) {
 
         const resMsgId = uuid();
         const output = cmdResult.output || '（无输出）';
-        db.prepare('INSERT INTO messages (id, user_id, role, content, session_key) VALUES (?, ?, \'assistant\', ?, ?)').run(resMsgId, user.id, output, sessionKey);
-        broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: output, sessionKey, ts: Date.now() });
+        const cmdButtons = cmdResult.buttons || null;
+        db.prepare('INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, \'assistant\', ?, ?, ?)').run(resMsgId, user.id, output, cmdButtons ? JSON.stringify(cmdButtons) : null, sessionKey);
+        broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: output, buttons: cmdButtons, sessionKey, ts: Date.now() });
         return;
       }
     } catch (err) {
@@ -199,6 +200,19 @@ async function handleCallback(ws, user, msg) {
   const sessionKey   = msg.sessionKey || 'main';
   if (!callbackData) return;
 
+  // ── Intercept command callbacks (mdl_provider_, mdl_sel_, etc.) ──
+  if (callbackData.startsWith('mdl_')) {
+    const result = await handleModelCallback(callbackData, user.id);
+    if (result) {
+      const resMsgId = uuid();
+      db.prepare('INSERT INTO messages (id, user_id, role, content, buttons, session_key) VALUES (?, ?, \'assistant\', ?, ?, ?)').run(
+        resMsgId, user.id, result.output, result.buttons ? JSON.stringify(result.buttons) : null, sessionKey
+      );
+      broadcast(user.id, { type: 'message', id: resMsgId, role: 'assistant', content: result.output, buttons: result.buttons, sessionKey, ts: Date.now() });
+      return;
+    }
+  }
+
   // Get user's agent_id
   const userRecord = db.prepare('SELECT agent_id, role FROM users WHERE id = ?').get(user.id);
   const agentId = userRecord?.agent_id || (userRecord?.role === 'admin' ? 'main' : `clawchat-${user.id}`);
@@ -233,6 +247,59 @@ async function handleCallback(ws, user, msg) {
     logger.error('Callback error:', err.message);
     broadcast(user.id, { type: 'error', message: '回调处理失败' });
   }
+}
+
+async function handleModelCallback(callbackData, userId) {
+  const { execFile } = await import('child_process');
+  const { promisify } = await import('util');
+  const execFileAsync = promisify(execFile);
+
+  // mdl_provider_<provider> → show models for that provider
+  if (callbackData.startsWith('mdl_provider_')) {
+    const provider = callbackData.slice('mdl_provider_'.length);
+    try {
+      const { stdout } = await execFileAsync('openclaw', ['models', 'list'], { timeout: 15000, maxBuffer: 512 * 1024 });
+      const lines = stdout.split('\n').slice(1).filter(l => l.trim());
+      const models = [];
+      for (const line of lines) {
+        const model = line.trim().split(/\s+/)[0];
+        if (model && model.startsWith(provider + '/')) {
+          models.push(model);
+        }
+      }
+      if (models.length === 0) return { output: `${provider} 下没有可用模型` };
+
+      const buttons = models.map(m => [{
+        text: m.split('/').slice(1).join('/'),
+        callback_data: `mdl_sel_${m}`,
+        style: 'default',
+      }]);
+      buttons.push([{ text: '<< 返回', callback_data: 'mdl_back', style: 'danger' }]);
+
+      return { output: `🤖 ${provider} 的模型：`, buttons };
+    } catch (err) {
+      return { output: `获取模型失败: ${err.message}` };
+    }
+  }
+
+  // mdl_sel_<model> → switch to that model
+  if (callbackData.startsWith('mdl_sel_')) {
+    const model = callbackData.slice('mdl_sel_'.length);
+    try {
+      const { stdout, stderr } = await execFileAsync('openclaw', ['models', 'set', model], { timeout: 15000, maxBuffer: 512 * 1024 });
+      return { output: `✅ 已切换到 ${model}` };
+    } catch (err) {
+      return { output: `❌ 切换失败: ${err.stdout || err.stderr || err.message}` };
+    }
+  }
+
+  // mdl_back → show provider list again
+  if (callbackData === 'mdl_back') {
+    const { parseAndExecCommand } = await import('./routes/commands.js');
+    return await parseAndExecCommand('/model list', userId);
+  }
+
+  return null;
 }
 
 function broadcast(userId, data) {
