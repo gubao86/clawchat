@@ -32,7 +32,14 @@ app.use('/admin', adminRoutes);
 app.use('/sessions', sessionRoutes);
 const server = createServer(app);
 setupWebSocket(server);
-server.listen(config.port, config.host, () => {
+server.listen(config.port, config.host, async () => {
   logger.info(`ClawChat server on ${config.host}:${config.port}`);
   logger.info(`Gateway: ${config.gateway.url}`);
+  // Pre-warm dynamic command discovery cache (background, non-blocking)
+  try {
+    const { getTopLevelCommands } = await import('./command-discovery.js');
+    getTopLevelCommands().then(cmds => {
+      logger.info(`Command discovery: ${cmds.length} top-level commands cached`);
+    }).catch(() => {});
+  } catch (_) {}
 });

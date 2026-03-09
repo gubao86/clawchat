@@ -169,4 +169,12 @@ export function invalidateCache() {
   subCache.clear();
 }
 
-export default { execCommand, buildHelpButtons, buildGroupDetail, invalidateCache };
+export async function getTopLevelCommands() {
+  return await discoverTopLevel();
+}
+
+export async function getSubcommandsFor(parent) {
+  return await getSubcommands(parent);
+}
+
+export default { execCommand, buildHelpButtons, buildGroupDetail, invalidateCache, getTopLevelCommands, getSubcommandsFor };
