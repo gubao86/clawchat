@@ -14,6 +14,7 @@ const execFileAsync = promisify(execFile);
 // args: 允许用户追加的参数位置说明
 export const COMMAND_DEFS = [
   // ── 🤖 模型管理 ───────────────────────────────────────────────────────────
+  { key: 'model:list',       cmd: '/models',            desc: '📋 模型管理菜单（交互式）', group: '🤖 模型管理',   cli: ['models','list'],               exec: true, special: true },
   { key: 'model:list',       cmd: '/model list',        desc: '列出所有可用模型',      group: '🤖 模型管理',   cli: ['models','list'],               exec: true  },
   { key: 'model:status',     cmd: '/model status',      desc: '查看模型连通状态',      group: '🤖 模型管理',   cli: ['models','status'],             exec: true  },
   { key: 'model:set',        cmd: '/model set',         desc: '切换当前使用的模型',    group: '🤖 模型管理',   cli: ['models','set'],                exec: true,  argHint: '模型ID，如 yunyi/claude-sonnet-4-6' },
