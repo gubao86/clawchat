@@ -81,7 +81,7 @@ class CommandService {
         body: jsonEncode({'key': key, 'args': args}),
       );
       final data = jsonDecode(res.body);
-      return (ok: data['ok'] == true, output: data['output'] ?? data['error'] ?? '');
+      return (ok: data['ok'] == true, output: (data['output'] ?? data['error'] ?? '').toString());
     } catch (e) {
       return (ok: false, output: '请求失败: $e');
     }
